@@ -23,10 +23,20 @@ let currentActiveTabId = null;
 /** Timestamp when the current session started */
 let currentSessionStart = null;
 
+/** Private / Focus mode — end timestamp (ms), or null when inactive */
+let privateModeEndTime = null;
+
+/** Tracks the last time (ms) each hostname was focused (tab switch away) */
+const hostnameLastFocus = new Map();
+
+/** Set of tab IDs currently in the discarded/dormant state */
+const dormantTabIds = new Set();
+
 // ─── Tab Activation Tracking ──────────────────────────────────────────────────
 
 /**
  * Record the hostname + title for a tab.
+ * Skips recording if privacy mode is active and tab is new (not previously tracked).
  */
 async function recordTab(tabId, tab) {
   let hostname = '';
@@ -43,13 +53,26 @@ async function recordTab(tabId, tab) {
     title = tab.title || 'Internal Page';
   }
 
+  // Check if privacy mode is active
+  const isPrivateMode = privateModeEndTime !== null && privateModeEndTime > Date.now();
+
   // Preserve existing totalTime if tab was already tracked
   const existing = tabSessions.get(tabId);
+  const wasTrackedBefore = !!existing;
+
+  // If privacy mode is active and this is a NEW tab (not previously tracked),
+  // skip recording it entirely — it won't appear in the Today list
+  if (isPrivateMode && !wasTrackedBefore) {
+    return;
+  }
+
   tabSessions.set(tabId, {
     hostname,
     title,
     activatedAt: Date.now(),
     totalTime: existing ? existing.totalTime : 0,
+    // Clear pausedDuringPrivate when tracking normally (privacy mode ended)
+    pausedDuringPrivate: false,
   });
 }
 
@@ -60,18 +83,44 @@ async function recordTab(tabId, tab) {
 async function finalizePreviousTab() {
   if (currentActiveTabId === null || currentSessionStart === null) return;
 
-  const session = tabSessions.get(currentActiveTabId);
-  if (session) {
-    const elapsed = Date.now() - currentSessionStart;
-    session.totalTime += elapsed;
+  // Skip tracking when private mode is active
+  if (privateModeEndTime !== null && privateModeEndTime > Date.now()) return;
 
-    // Update daily history (hostname-level aggregation)
-    const today = new Date().toISOString().split('T')[0];
-    const key = `dailyHistory.${today}.${session.hostname}`;
-    const stored = await chrome.storage.local.get(key);
-    const current = stored[key] || 0;
-    await chrome.storage.local.set({ [key]: current + elapsed });
+  const session = tabSessions.get(currentActiveTabId);
+  if (!session) return;
+
+  const elapsed = Date.now() - currentSessionStart;
+  session.totalTime += elapsed;
+
+  // Skip writing for blocked domains
+  const { blockedDomains = [] } = await chrome.storage.local.get('blockedDomains');
+  if (blockedDomains.includes(session.hostname)) return;
+
+  // Update daily history (hostname-level aggregation)
+  const today = new Date().toISOString().split('T')[0];
+  const key = `dailyHistory.${today}.${session.hostname}`;
+  const stored = await chrome.storage.local.get(key);
+  const current = stored[key] || 0;
+  await chrome.storage.local.set({ [key]: current + elapsed });
+
+  // Update hourly heatmap data
+  const hour = new Date().getHours();
+  const hKey = `hourlyData.${session.hostname}`;
+  const hStored = await chrome.storage.local.get(hKey);
+  const hData = hStored[hKey] || {};
+  if (!hData[today]) hData[today] = new Array(24).fill(0);
+  hData[today][hour] = (hData[today][hour] || 0) + elapsed;
+  // Only keep last 30 days of hourly data to avoid unbounded growth
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 30);
+  const cutoffStr = cutoff.toISOString().split('T')[0];
+  for (const d of Object.keys(hData)) {
+    if (d < cutoffStr) delete hData[d];
   }
+  await chrome.storage.local.set({ [hKey]: hData });
+
+  // Record last focus time for this hostname (used for staleness detection)
+  hostnameLastFocus.set(session.hostname, Date.now());
 
   currentSessionStart = null;
 }
@@ -114,14 +163,20 @@ chrome.tabs.onCreated.addListener(async (tab) => {
 chrome.tabs.onRemoved.addListener(async (tabId) => {
   const session = tabSessions.get(tabId);
   if (session && currentSessionStart !== null) {
-    // Add any unrecorded time to history
-    const elapsed = Date.now() - currentSessionStart;
-    const today = new Date().toISOString().split('T')[0];
-    const key = `dailyHistory.${today}.${session.hostname}`;
-    const stored = await chrome.storage.local.get(key);
-    await chrome.storage.local.set({ [key]: (stored[key] || 0) + session.totalTime + elapsed });
+    // Skip writing for blocked domains
+    const { blockedDomains = [] } = await chrome.storage.local.get('blockedDomains');
+    if (!blockedDomains.includes(session.hostname)) {
+      // Add any unrecorded time to history
+      const elapsed = Date.now() - currentSessionStart;
+      const today = new Date().toISOString().split('T')[0];
+      const key = `dailyHistory.${today}.${session.hostname}`;
+      const stored = await chrome.storage.local.get(key);
+      await chrome.storage.local.set({ [key]: (stored[key] || 0) + session.totalTime + elapsed });
+      hostnameLastFocus.set(session.hostname, Date.now());
+    }
   }
   tabSessions.delete(tabId);
+  dormantTabIds.delete(tabId);
   if (currentActiveTabId === tabId) {
     currentActiveTabId = null;
     currentSessionStart = null;
@@ -129,11 +184,19 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
   updateBadge();
 });
 
-// Tab updated (URL change etc.)
+// Tab discard state changes (dormant/wake transitions)
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (tabId === currentActiveTabId && changeInfo.title) {
     const session = tabSessions.get(tabId);
     if (session) session.title = changeInfo.title;
+  }
+  // Track discarded state
+  if ('discarded' in changeInfo) {
+    if (changeInfo.discarded) {
+      dormantTabIds.add(tabId);
+    } else {
+      dormantTabIds.delete(tabId);
+    }
   }
   updateBadge();
 });
@@ -163,8 +226,8 @@ async function persistSessions() {
   await chrome.storage.local.set({ sessionData });
 }
 
-// Persist every 5 seconds
-setInterval(persistSessions, 5000);
+// Persist every 30 seconds
+setInterval(persistSessions, 30000);
 
 // Also persist when tab is deactivated (onActivated already calls finalizePreviousTab)
 chrome.tabs.onActivated.addListener(async () => {
@@ -246,7 +309,7 @@ chrome.runtime.onInstalled.addListener(() => { updateBadge(); });
 
 // ─── Message Handler (for app.js to query session data) ──────────────────────
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
   if (message.type === 'GET_SESSION_DATA') {
     // Return all tracked tab sessions
     const result = {};
@@ -268,5 +331,77 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     sendResponse({ tabSessions: result });
   }
+
+  // ── Private mode: enable with duration in minutes (or 'midnight') ──
+  if (message.type === 'SET_PRIVATE_MODE') {
+    const minutes = message.minutes;
+    if (minutes === null) {
+      // Disable private mode
+      privateModeEndTime = null;
+    } else if (minutes === 'midnight') {
+      // Calculate ms until midnight
+      const now = new Date();
+      const midnight = new Date(now);
+      midnight.setHours(24, 0, 0, 0);
+      privateModeEndTime = midnight.getTime();
+    } else {
+      privateModeEndTime = Date.now() + minutes * 60 * 1000;
+    }
+    sendResponse({ privateModeEndTime });
+    return true;
+  }
+
+  if (message.type === 'GET_PRIVATE_MODE') {
+    // Auto-disable if expired
+    if (privateModeEndTime !== null && Date.now() > privateModeEndTime) {
+      privateModeEndTime = null;
+    }
+    sendResponse({ privateModeEndTime });
+    return true;
+  }
+
+  // ── Get staleness data: last focus time per hostname ──
+  if (message.type === 'GET_STALENESS') {
+    sendResponse({ hostnameLastFocus: Object.fromEntries(hostnameLastFocus) });
+    return true;
+  }
+
+  // ── Get hourly heatmap data for a specific date ──
+  if (message.type === 'GET_HOURLY_DATA') {
+    const targetDate = message.date || new Date().toISOString().split('T')[0];
+    // Get all storage keys that are hourlyData.*
+    const allKeys = await new Promise(resolve => chrome.storage.local.get(null, items => resolve(Object.keys(items))));
+    const hKeys = allKeys.filter(k => k.startsWith('hourlyData.'));
+    const result = {};
+    for (const hKey of hKeys) {
+      const hostname = hKey.replace('hourlyData.', '');
+      const stored = await new Promise(resolve => chrome.storage.local.get(hKey, r => resolve(r[hKey])));
+      if (stored && stored[targetDate]) {
+        result[hostname] = stored[targetDate];
+      }
+    }
+    sendResponse({ hourlyData: result, date: targetDate });
+    return true;
+  }
+
+  // ── Discard (sleep) a specific tab ──
+  if (message.type === 'DISCARD_TAB') {
+    const tabId = message.tabId;
+    if (tabId != null) {
+      try {
+        await chrome.tabs.discard(tabId);
+        dormantTabIds.add(tabId);
+      } catch {}
+    }
+    sendResponse({});
+    return true;
+  }
+
+  // ── Get list of currently dormant tab IDs ──
+  if (message.type === 'GET_DORMANT_TABS') {
+    sendResponse({ dormantTabIds: Array.from(dormantTabIds) });
+    return true;
+  }
+
   return true;
 });

@@ -17,6 +17,209 @@
 
 
 /* ----------------------------------------------------------------
+   INTERNATIONALIZATION (i18n)
+   ---------------------------------------------------------------- */
+
+const I18N = {
+  currentLang: 'en',
+
+  translations: {
+    en: {
+      // Header
+      'Time spent': 'Time spent',
+      'Private': 'Private Mode',
+      'Right now': 'Right now',
+      'Open tabs': 'Open tabs',
+
+      // View switcher
+      'Today': 'Today',
+      'This Week': 'This Week',
+      'This Month': 'This Month',
+      'This Year': 'This Year',
+
+      // Domain card
+      'tabs open': 'tabs open',
+      'tab open': 'tab open',
+      'duplicate': 'duplicate',
+      'duplicates': 'duplicates',
+      'Close all': 'Close all',
+      'Close': 'Close',
+      'Close duplicates': 'Close duplicates',
+      'Save for later': 'Save for later',
+      'Wake up': 'Wake up',
+      'Hide': 'Hide',
+      'Delete': 'Delete',
+      'Block & Delete': 'Block & Delete',
+      '休眠': 'Sleep',
+      '唤醒': 'Wake',
+      '已关闭': 'Closed',
+      '个未读标签': 'stale tabs',
+      '天未读': 'days stale',
+      '个月未读': 'months stale',
+      '清理': 'Clear',
+
+      // Banners
+      '域名分散提示': ' domains open — tabs spread across too many sites',
+      '知道了': 'Got it',
+      'Tab Out 重复提示': 'Tab Out tabs open',
+      'Keep just this one?': 'Keep just this one?',
+      'Close extras': 'Close extras',
+
+      // Stats view
+      'No data yet': 'No data yet',
+      'Start browsing to see your stats here.': 'Start browsing to see your stats here.',
+      'total': 'total',
+      'domains': 'domains',
+      'hours': 'hours',
+      'minutes': 'minutes',
+      '刚刚': 'Just now',
+
+      // Settings / Privacy
+      '设置': 'Settings',
+      '导出历史记录': 'Export History',
+      '导入历史记录': 'Import History',
+      '隐私模式': 'Private Mode',
+      '隐私模式说明': 'Pause tracking while private mode is active',
+      '开启隐私模式': 'Enable private mode',
+      '退出隐私模式': 'Exit private mode',
+      '隐私模式开启，到午夜自动关闭': 'Private mode on until midnight',
+      '隐私模式开启，暂停计时': 'Private mode on, tracking paused for',
+      '隐私模式已关闭': 'Private mode off',
+      '隐私模式已自动关闭': 'Private mode auto-closed',
+      '后自动关闭': 'before auto-close',
+
+      // Saved for later
+      'Saved for later': 'Saved for later',
+      'Nothing saved. Living in the moment.': 'Nothing saved. Living in the moment.',
+      'Archive': 'Archive',
+
+      // Misc
+      'Homepages': 'Homepages',
+      '个域名': 'domains',
+      '个标签': 'tabs',
+    },
+
+    zh: {
+      // Header
+      'Time spent': '已工作',
+      'Private': '打开隐私模式',
+      'Right now': '当前',
+      'Open tabs': '打开的标签页',
+
+      // View switcher
+      'Today': '今日',
+      'This Week': '本周',
+      'This Month': '本月',
+      'This Year': '今年',
+
+      // Domain card
+      'tabs open': '个标签页打开',
+      'tab open': '个标签页打开',
+      'duplicate': '重复',
+      'duplicates': '重复',
+      'Close all': '关闭全部',
+      'Close': '关闭',
+      'Close duplicates': '关闭重复',
+      'Save for later': '稍后阅读',
+      'Wake up': '唤醒',
+      'Hide': '隐藏',
+      'Delete': '删除',
+      'Block & Delete': '加入隐私名单并删除',
+      'Sleep': '休眠',
+      'Wake': '唤醒',
+      'Closed': '已关闭',
+      'stale tabs': '个未读标签',
+      'days stale': '天未读',
+      'months stale': '个月未读',
+      'Clear': '清理',
+
+      // Banners
+      ' domains open — tabs spread across too many sites': ' 个域名同时打开，标签页过于分散',
+      'Got it': '知道了',
+      'Tab Out tabs open': 'Tab Out 标签页打开',
+      'Keep just this one?': '只保留这个？',
+      'Close extras': '关闭其他',
+
+      // Stats view
+      'No data yet': '暂无数据',
+      'Start browsing to see your stats here.': '开始浏览后在这里查看统计。',
+      'total': '总计时长',
+      'domains': '个域名',
+      'hours': '小时',
+      'minutes': '分钟',
+      'Just now': '刚刚',
+
+      // Settings / Privacy
+      'Settings': '设置',
+      'Export History': '导出历史记录',
+      'Import History': '导入历史记录',
+      'Private Mode': '隐私模式',
+      'Pause tracking while private mode is active': '开启隐私模式期间暂停计时',
+      'Enable private mode': '开启隐私模式',
+      'Exit private mode': '退出隐私模式',
+      'Private mode on until midnight': '隐私模式开启，到午夜自动关闭',
+      'Private mode on, tracking paused for': '隐私模式开启，暂停计时',
+      'Private mode off': '隐私模式已关闭',
+      'Private mode auto-closed': '隐私模式已自动关闭',
+      'before auto-close': '后自动关闭',
+
+      // Saved for later
+      'Saved for later': '稍后阅读',
+      'Nothing saved. Living in the moment.': '暂无保存的内容，活在当下。',
+      'Archive': '归档',
+
+      // Misc
+      'Homepages': '首页',
+      'domains': '个域名',
+      'tabs': '个标签页',
+    }
+  },
+
+  /**
+   * Get translated string. Returns original if not found.
+   * @param {string} key - English key (default language)
+   * @returns {string}
+   */
+  t(key) {
+    if (this.currentLang === 'zh' && this.translations.zh[key]) {
+      return this.translations.zh[key];
+    }
+    return key;
+  },
+
+  /**
+   * Toggle between 'en' and 'zh'
+   */
+  toggle() {
+    this.currentLang = this.currentLang === 'en' ? 'zh' : 'en';
+    this.save();
+    return this.currentLang;
+  },
+
+  /**
+   * Save current language to storage
+   */
+  save() {
+    try {
+      chrome.storage.local.set({ i18nLang: this.currentLang });
+    } catch {}
+  },
+
+  /**
+   * Load language from storage
+   */
+  async load() {
+    try {
+      const { i18nLang } = await chrome.storage.local.get('i18nLang');
+      if (i18nLang === 'en' || i18nLang === 'zh') {
+        this.currentLang = i18nLang;
+      }
+    } catch {}
+  }
+};
+
+
+/* ----------------------------------------------------------------
    CHROME TABS — Direct API Access
 
    Since this page IS the extension's new tab page, it has full
@@ -30,8 +233,18 @@ let openTabs = [];
 /** @type {Object.<string, {hostname: string, title: string, totalTime: number}>} */
 let tabSessionData = {};
 
+/** Private mode state — set after syncing with background.js */
+let privateModeActive = false;
+let privateModeEndTime = null;
+let privateModeInterval = null;
+
 /** Timestamp of last timer refresh */
 let lastTimerRefresh = Date.now();
+
+/** Cached today's historical total (ms) — refreshed periodically, not every second */
+let todayHistoricalTotalMs = 0;
+let lastHistoricalCacheTime = 0;
+const HISTORICAL_CACHE_INTERVAL_MS = 30000; // refresh historical cache every 30s
 
 /**
  * Query background.js for current session data (tab times).
@@ -44,6 +257,44 @@ async function getTabSessionData() {
   } catch {
     return {};
   }
+}
+
+/**
+ * Get today's total browsing time from chrome.storage.local (dailyHistory).
+ * Uses a cache to avoid reading storage every second.
+ * @returns {Promise<number>} Total milliseconds for today
+ */
+async function getTodayHistoricalTotal() {
+  const now = Date.now();
+  // Use cached value if fresh enough
+  if (now - lastHistoricalCacheTime < HISTORICAL_CACHE_INTERVAL_MS) {
+    return todayHistoricalTotalMs;
+  }
+
+  const today = new Date().toISOString().split('T')[0];
+  const prefix = `dailyHistory.${today}.`;
+
+  try {
+    // Get all storage keys at once, then filter
+    const allItems = await new Promise(resolve => {
+      chrome.storage.local.get(null, items => resolve(items));
+    });
+    let total = 0;
+    for (const key of Object.keys(allItems)) {
+      if (key.startsWith(prefix)) {
+        const hostname = key.slice(prefix.length);
+        if (hostname !== '__internal__') {
+          total += allItems[key] || 0;
+        }
+      }
+    }
+    todayHistoricalTotalMs = total;
+    lastHistoricalCacheTime = now;
+  } catch {
+    // Ignore errors, keep using cached value
+  }
+
+  return todayHistoricalTotalMs;
 }
 
 /**
@@ -81,12 +332,16 @@ async function refreshTimerDisplay() {
   tabSessionData = await getTabSessionData();
   lastTimerRefresh = Date.now();
 
-  // Update header total time
-  let totalMs = 0;
+  // Update header total time = today's historical + current session
+  let sessionMs = 0;
   const sessions = Object.values(tabSessionData);
   for (const session of sessions) {
-    totalMs += (session.totalTime || 0);
+    sessionMs += (session.totalTime || 0);
   }
+
+  // Add today's historical total (cached, refreshed every 30s)
+  const historicalMs = await getTodayHistoricalTotal();
+  const totalMs = historicalMs + sessionMs;
 
   const totalEl = document.getElementById('totalWorkTime');
   if (totalEl) {
@@ -134,6 +389,7 @@ async function fetchOpenTabs() {
       title:    t.title,
       windowId: t.windowId,
       active:   t.active,
+      discarded: t.discarded || false,
       // Flag Tab Out's own pages so we can detect duplicate new tabs
       isTabOut: t.url === newtabUrl || t.url === 'chrome://newtab/',
     }));
@@ -524,11 +780,111 @@ function animateCardOut(card) {
  *
  * Brief pop-up notification at the bottom of the screen.
  */
-function showToast(message) {
+function showToast(message, duration = 2500) {
   const toast = document.getElementById('toast');
   document.getElementById('toastText').textContent = message;
   toast.classList.add('visible');
-  setTimeout(() => toast.classList.remove('visible'), 2500);
+  setTimeout(() => toast.classList.remove('visible'), duration);
+}
+
+/**
+ * openSettingsPanel()
+ * Opens the settings modal and renders the blocked domains list.
+ */
+async function openSettingsPanel() {
+  const overlay = document.getElementById('settingsOverlay');
+  const list = document.getElementById('blockedList');
+  const empty = document.getElementById('blockedEmpty');
+  if (!overlay) return;
+
+  overlay.style.display = 'flex';
+
+  // Render blocked domains
+  const blocked = await getBlockedDomains();
+  if (blocked.length === 0) {
+    list.innerHTML = '';
+    empty.style.display = 'block';
+  } else {
+    empty.style.display = 'none';
+    list.innerHTML = blocked.map(hostname => {
+      const safe = hostname.replace(/"/g, '&quot;');
+      return `
+      <div class="blocked-item">
+        <div class="blocked-info">
+          <span class="blocked-name">${friendlyDomain(hostname)}</span>
+          <span class="blocked-hostname">${hostname}</span>
+        </div>
+        <button class="blocked-remove-btn" data-action="remove-blocked" data-hostname="${safe}" title="移出隐私名单，恢复统计">
+          移除
+        </button>
+      </div>`;
+    }).join('');
+  }
+}
+
+/* ─── History Export / Import ─────────────────────────────────────────────── */
+
+/**
+ * exportAllHistory()
+ * Reads all dailyHistory.* keys and triggers a JSON file download.
+ */
+async function exportAllHistory() {
+  const allKeys = await new Promise(resolve => {
+    chrome.storage.local.get(null, items => resolve(Object.keys(items)));
+  });
+
+  const historyKeys = allKeys.filter(k => k.startsWith('dailyHistory.') || k === 'blockedDomains');
+  if (historyKeys.length === 0) {
+    showToast('没有可导出的历史记录');
+    return;
+  }
+
+  const exportData = {};
+  for (const key of historyKeys) {
+    const val = await new Promise(resolve => chrome.storage.local.get(key, r => resolve(r[key])));
+    exportData[key] = val;
+  }
+
+  const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const date = new Date().toISOString().split('T')[0];
+  a.href = url;
+  a.download = `tabout-history-${date}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast(`已导出 ${historyKeys.length} 条历史记录`);
+}
+
+/**
+ * importHistory(file)
+ * Parses a JSON file and writes its data back to chrome.storage.local.
+ */
+async function importHistory(file) {
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+
+    const entries = Object.entries(data);
+    if (entries.length === 0) {
+      showToast('导入文件为空');
+      return;
+    }
+
+    await chrome.storage.local.set(data);
+    showToast(`已导入 ${entries.length} 条历史记录，请刷新页面`);
+  } catch (e) {
+    showToast('导入失败：文件格式错误');
+  }
+}
+
+/**
+ * closeSettingsPanel()
+ * Closes the settings modal.
+ */
+function closeSettingsPanel() {
+  const overlay = document.getElementById('settingsOverlay');
+  if (overlay) overlay.style.display = 'none';
 }
 
 /**
@@ -831,13 +1187,343 @@ function checkTabOutDupes() {
   const tabOutTabs = openTabs.filter(t => t.isTabOut);
   const banner  = document.getElementById('tabOutDupeBanner');
   const countEl = document.getElementById('tabOutDupeCount');
+  const textEl = document.getElementById('tabOutDupeText');
+  const btnEl = document.getElementById('tabOutDupeDismissBtn');
   if (!banner) return;
 
   if (tabOutTabs.length > 1) {
     if (countEl) countEl.textContent = tabOutTabs.length;
+    // Update text based on current language
+    if (textEl) {
+      textEl.textContent = I18N.currentLang === 'zh'
+        ? ' 个 Tab Out 标签页打开 — 只保留这个？'
+        : ' Tab Out tabs open — keep just this one?';
+    }
+    if (btnEl) {
+      btnEl.textContent = I18N.currentLang === 'zh' ? '关闭其他' : 'Close extras';
+    }
     banner.style.display = 'flex';
   } else {
     banner.style.display = 'none';
+  }
+}
+
+/**
+ * checkDomainSprwaw()
+ *
+ * Checks how many distinct hostnames are currently open.
+ * If more than DOMAIN_SPRWAD_THRESHOLD (default 8), shows a warning banner
+ * suggesting the user consolidate their tabs.
+ */
+function checkDomainSprwaw() {
+  const SPRWAD_THRESHOLD = 8;
+  const banner  = document.getElementById('domainSprwawBanner');
+  const countEl = document.getElementById('domainSprwawCount');
+  const textEl = document.getElementById('domainSprwawText');
+  const btnEl = document.getElementById('domainSprwawDismissBtn');
+  if (!banner) return;
+
+  const domains = new Set();
+  for (const tab of openTabs) {
+    if (tab.isChromeInternal) continue;
+    try {
+      const hostname = new URL(tab.url).hostname.replace(/^www\./, '');
+      if (hostname && hostname !== '__internal__') domains.add(hostname);
+    } catch {}
+  }
+
+  if (domains.size > SPRWAD_THRESHOLD) {
+    if (countEl) countEl.textContent = domains.size;
+    // Update text based on current language
+    if (textEl) {
+      textEl.textContent = I18N.currentLang === 'zh'
+        ? ' 个域名同时打开，标签页过于分散'
+        : ' domains open — tabs spread across too many sites';
+    }
+    if (btnEl) {
+      btnEl.textContent = I18N.currentLang === 'zh' ? '知道了' : 'Got it';
+    }
+    banner.style.display = 'flex';
+  } else {
+    banner.style.display = 'none';
+  }
+}
+
+/* ─── Private Mode (Privacy Timer) ─────────────────────────────────────────── */
+
+/* ─── Tab Heatmap ───────────────────────────────────────────────────────────── */
+
+/**
+ * renderHeatmap()
+ *
+ * Renders a 24-hour heatmap below the productivity banner in Today view.
+ * Shows browsing intensity per hour for the top domains.
+ */
+async function renderHeatmap() {
+  const today = new Date().toISOString().split('T')[0];
+  const containerId = 'heatmapContainer';
+  let container = document.getElementById(containerId);
+  if (!container) return;
+
+  let hourlyData = {};
+  try {
+    const resp = await chrome.runtime.sendMessage({ type: 'GET_HOURLY_DATA', date: today });
+    hourlyData = (resp && resp.hourlyData) ? resp.hourlyData : {};
+  } catch (e) {
+    console.warn('[tab-out] Failed to get hourly data:', e);
+    container.innerHTML = '';
+    return;
+  }
+
+  const hostnames = Object.keys(hourlyData).filter(k => k !== '__internal__');
+  if (hostnames.length === 0) { container.innerHTML = ''; return; }
+
+  hostnames.sort((a, b) => {
+    const sumA = (hourlyData[a] || []).reduce((s, v) => s + v, 0);
+    const sumB = (hourlyData[b] || []).reduce((s, v) => s + v, 0);
+    return sumB - sumA;
+  });
+  
+  // DEBUG: log how many hostnames we got
+  console.log('[DEBUG renderHeatmap] hostnames count:', hostnames.length, ', top 8:', hostnames.slice(0, 8));
+  
+  // HARD CAP: ensure we never render more than 8 domains in the heatmap
+  const topHosts = hostnames.slice(0, Math.min(8, hostnames.length));
+
+  let maxVal = 0;
+  for (const h of topHosts) {
+    for (const v of (hourlyData[h] || [])) { if (v > maxVal) maxVal = v; }
+  }
+
+  const HOURS = Array.from({ length: 24 }, (_, i) => i);
+  const fmt = (ms) => {
+    if (!ms) return '';
+    const m = Math.round(ms / 60000);
+    return m < 60 ? `${m}m` : `${(m / 60).toFixed(1)}h`;
+  };
+
+  const hourLabels = `<div class="heatmap-label-corner"></div>` +
+    HOURS.map(h => `<div class="heatmap-hour-label">${String(h).padStart(2, '0')}</div>`).join('');
+
+  const rows = topHosts.map(hostname => {
+    const data = hourlyData[hostname] || new Array(24).fill(0);
+    const cells = HOURS.map(h => {
+      const val = data[h] || 0;
+      const intensity = maxVal > 0 ? val / maxVal : 0;
+      const alpha = intensity < 0.01 ? 0 : 0.1 + intensity * 0.7;
+      const color = `rgba(90, 122, 98, ${alpha.toFixed(2)})`;
+      return `<div class="heatmap-cell" style="background:${color}" title="${hostname} · ${String(h).padStart(2,'0')}:00 — ${fmt(val)}"></div>`;
+    }).join('');
+    return `<div class="heatmap-hostname" title="${hostname}">${friendlyDomain(hostname)}</div>${cells}`;
+  }).join('');
+
+  container.innerHTML = `
+    <div class="heatmap-title">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" width="13" height="13"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3v11.25A2.25 2.25 0 0 0 6 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0 1 4.5 16.5h15.75a2.25 2.25 0 0 1 2.25 2.25V3" /></svg>
+      今日热力图
+    </div>
+    <div class="heatmap-grid">
+      <div class="heatmap-header">${hourLabels}</div>
+      <div class="heatmap-body">${rows}</div>
+    </div>
+    <div class="heatmap-legend">
+      <span style="color:var(--muted);font-size:10px;">少</span>
+      <div class="heatmap-legend-bar"></div>
+      <span style="color:var(--muted);font-size:10px;">多</span>
+    </div>
+  `;
+}
+
+/* ─── Productivity Banner ─────────────────────────────────────────────────── */
+
+/**
+ * renderProductivityBanner(range)
+ *
+ * Shows a warm productivity summary banner at the top of the Today/Week views.
+ * Generates encouraging messages based on browsing stats.
+ */
+async function renderProductivityBanner(range) {
+  const banner = document.getElementById('productivityBanner');
+  const msgEl  = document.getElementById('productivityMessage');
+  const statsEl = document.getElementById('productivityStats');
+  if (!banner || !msgEl || !statsEl) return;
+
+  // Only show for today and week views
+  if (range !== 'today' && range !== 'week') {
+    banner.style.display = 'none';
+    return;
+  }
+
+  const stats = await getStatsData(range);
+  if (!stats || stats.length === 0) {
+    banner.style.display = 'none';
+    return;
+  }
+
+  const totalMs = stats.reduce((s, e) => s + e.totalMs, 0);
+  const totalHours = (totalMs / 3600000).toFixed(1);
+  const topDomain = stats[0]?.friendlyName || stats[0]?.hostname || '';
+  const topPct = totalMs > 0 ? Math.round((stats[0].totalMs / totalMs) * 100) : 0;
+
+  // Generate a warm, varied message
+  const messages = {
+    today: [
+      `今天工作了 ${totalHours} 小时，继续保持 💪`,
+      `${totalHours} 小时，专注的你很棒 🌟`,
+      `今日专注 ${totalHours} 小时，${topDomain} 用了 ${topPct}% 的时间`,
+    ],
+    week: [
+      `本周累计 ${totalHours} 小时，效率不错 📊`,
+      `${totalHours} 小时的一周，${topDomain} 占 ${topPct}% 的时间`,
+      `这周你工作了 ${totalHours} 小时，继续加油 💪`,
+    ],
+  };
+
+  const pool = messages[range] || messages.today;
+  const msg = pool[Math.floor(Math.random() * pool.length)];
+
+  // Build stats line: top 3 domains
+  const top3 = stats.slice(0, 3).map(s => {
+    const pct = totalMs > 0 ? Math.round((s.totalMs / totalMs) * 100) : 0;
+    return `${s.friendlyName || s.hostname} (${pct}%)`;
+  }).join(' · ');
+
+  msgEl.textContent = msg;
+  statsEl.textContent = top3;
+
+  banner.style.display = 'flex';
+}
+
+/**
+ * Sync private mode state with the background service worker.
+ * Updates button UI and starts/stops the countdown timer.
+ */
+async function syncPrivateMode() {
+  try {
+    const resp = await chrome.runtime.sendMessage({ type: 'GET_PRIVATE_MODE' });
+    privateModeEndTime = resp?.privateModeEndTime || null;
+  } catch {
+    privateModeEndTime = null;
+  }
+
+  privateModeActive = privateModeEndTime !== null && Date.now() < privateModeEndTime;
+
+  const btn = document.getElementById('privateModeBtn');
+  const label = document.getElementById('privateModeLabel');
+  if (btn) btn.classList.toggle('active', privateModeActive);
+  updatePrivateModeTooltip();
+  if (label) {
+    if (privateModeActive) {
+      updatePrivateModeCountdown();
+      startPrivateModeCountdown();
+    } else {
+      label.textContent = '隐私';
+    }
+  }
+}
+
+function startPrivateModeCountdown() {
+  if (privateModeInterval) clearInterval(privateModeInterval);
+  privateModeInterval = setInterval(updatePrivateModeCountdown, 1000);
+}
+
+function updatePrivateModeCountdown() {
+  if (!privateModeActive || !privateModeEndTime) return;
+
+  const remaining = privateModeEndTime - Date.now();
+  if (remaining <= 0) {
+    // Auto-disable: private mode expired
+    if (privateModeInterval) clearInterval(privateModeInterval);
+    privateModeActive = false;
+    privateModeEndTime = null;
+    const btn = document.getElementById('privateModeBtn');
+    const label = document.getElementById('privateModeLabel');
+    if (btn) {
+      btn.classList.remove('active');
+      btn.title = '开启隐私模式，暂停计时 1 小时';
+    }
+    if (label) label.textContent = '隐私';
+    showToast('隐私模式已自动关闭');
+    return;
+  }
+
+  const totalSec = Math.ceil(remaining / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  const label = document.getElementById('privateModeLabel');
+  if (label) {
+    label.textContent = h > 0
+      ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
+      : `${m}:${String(s).padStart(2,'0')}`;
+  }
+}
+
+/**
+ * Format minutes to human-readable Chinese string.
+ * @param {number|string} minutes
+ * @returns {string}
+ */
+function formatMinutes(minutes) {
+  if (minutes === 'midnight') return '到午夜';
+  const m = parseInt(minutes, 10);
+  if (m >= 60) {
+    const h = m / 60;
+    return h === 1 ? '1 小时' : `${h} 小时`;
+  }
+  return `${m} 分钟`;
+}
+
+/**
+ * Update the privacy mode button tooltip based on current state and selected duration.
+ */
+function updatePrivateModeTooltip() {
+  const btn = document.getElementById('privateModeBtn');
+  const select = document.getElementById('privateModeSelect');
+  if (!btn) return;
+
+  if (privateModeActive) {
+    // Active: show exit tooltip
+    btn.title = '退出隐私模式';
+  } else {
+    // Inactive: show enable tooltip with selected duration
+    const minutes = select ? select.value : '60';
+    btn.title = `开启隐私模式，暂停计时 ${formatMinutes(minutes)}`;
+  }
+}
+
+/**
+ * Toggle private mode on/off.
+ * Reads the selected duration from the dropdown before enabling.
+ */
+async function togglePrivateMode() {
+  const select = document.getElementById('privateModeSelect');
+  const minutes = select ? select.value : '60';
+
+  const minutesVal = minutes === 'midnight' ? 'midnight' : parseInt(minutes, 10);
+
+  if (!privateModeActive) {
+    // Enabling — send duration to background
+    await chrome.runtime.sendMessage({ type: 'SET_PRIVATE_MODE', minutes: minutesVal });
+    // Immediately sync state to show countdown without page refresh
+    await syncPrivateMode();
+    showToast(minutesVal === 'midnight'
+      ? '隐私模式开启，到午夜自动关闭'
+      : `隐私模式开启，暂停计时 ${formatMinutes(minutesVal)}`);
+  } else {
+    // Disabling early
+    await chrome.runtime.sendMessage({ type: 'SET_PRIVATE_MODE', minutes: null });
+    if (privateModeInterval) clearInterval(privateModeInterval);
+    privateModeActive = false;
+    privateModeEndTime = null;
+    const btn = document.getElementById('privateModeBtn');
+    const label = document.getElementById('privateModeLabel');
+    if (btn) {
+      btn.classList.remove('active');
+      btn.title = '开启隐私模式，暂停计时 1 小时';
+    }
+    if (label) label.textContent = '隐私';
+    showToast('隐私模式已关闭');
   }
 }
 
@@ -884,12 +1570,13 @@ function buildOverflowChips(hiddenTabs, urlCounts = {}) {
    ---------------------------------------------------------------- */
 
 /**
- * renderDomainCard(group, groupIndex)
+ * renderDomainCard(group, hostnameStaleness)
  *
  * Builds the HTML for one domain group card.
  * group = { domain: string, tabs: [{ url, title, id, windowId, active }] }
+ * hostnameStaleness = { hostname: lastFocusTimestamp }
  */
-function renderDomainCard(group) {
+function renderDomainCard(group, hostnameStaleness = {}) {
   const tabs      = group.tabs || [];
   const tabCount  = tabs.length;
   const isLanding = group.domain === '__landing-pages__';
@@ -919,6 +1606,20 @@ function renderDomainCard(group) {
       </span>`
     : '';
 
+  // Staleness badge — show "N days stale" if hostname hasn't been focused in 7+ days
+  let staleBadge = '';
+  if (groupHostname && hostnameStaleness[groupHostname]) {
+    const daysSince = Math.floor((Date.now() - hostnameStaleness[groupHostname]) / 86400000);
+    if (daysSince >= 7) {
+      const daysLabel = daysSince >= 30
+        ? `${Math.floor(daysSince / 30)} 个月未读`
+        : `${daysSince} 天未读`;
+      staleBadge = `<span class="open-tabs-badge" style="color:var(--accent-amber);background:rgba(200,113,58,0.08);">
+        🕐 ${daysLabel}
+      </span>`;
+    }
+  }
+
   // Deduplicate for display: show each URL once, with (Nx) badge if duped
   const seen = new Set();
   const uniqueTabs = [];
@@ -938,23 +1639,28 @@ function renderDomainCard(group) {
     } catch {}
     const count    = urlCounts[tab.url];
     const dupeTag  = count > 1 ? ` <span class="chip-dupe-badge">(${count}x)</span>` : '';
-    const chipClass = count > 1 ? ' chip-has-dupes' : '';
+    const isDormant = tab.discarded;
+    const chipClass = (count > 1 ? ' chip-has-dupes' : '') + (isDormant ? ' chip-dormant' : '');
     const safeUrl   = (tab.url || '').replace(/"/g, '&quot;');
     const safeTitle = label.replace(/"/g, '&quot;');
     let domain = '';
     try { domain = new URL(tab.url).hostname; } catch {}
     const faviconUrl = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=16` : '';
-    return `<div class="page-chip clickable${chipClass}" data-action="focus-tab" data-tab-url="${safeUrl}" title="${safeTitle}">
+    const zzzBadge = isDormant ? ' <span class="chip-dormant-badge">💤</span>' : '';
+    const actions = isDormant
+      ? `<button class="chip-action chip-dormant" data-action="wake-tab" data-tab-url="${safeUrl}" data-tab-id="${tab.id}" title="唤醒此标签">
+           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z" /></svg>
+         </button>`
+      : `<button class="chip-action chip-save" data-action="defer-single-tab" data-tab-url="${safeUrl}" data-tab-title="${safeTitle}" title="Save for later">
+           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0 1 11.186 0Z" /></svg>
+         </button>
+         <button class="chip-action chip-close" data-action="close-single-tab" data-tab-url="${safeUrl}" title="Close this tab">
+           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+         </button>`;
+    return `<div class="page-chip clickable${chipClass}" data-action="${isDormant ? 'wake-tab' : 'focus-tab'}" data-tab-url="${safeUrl}" data-tab-id="${tab.id}" title="${safeTitle}${isDormant ? ' (休眠)' : ''}">
       ${faviconUrl ? `<img class="chip-favicon" src="${faviconUrl}" alt="" onerror="this.style.display='none'">` : ''}
-      <span class="chip-text">${label}</span>${dupeTag}
-      <div class="chip-actions">
-        <button class="chip-action chip-save" data-action="defer-single-tab" data-tab-url="${safeUrl}" data-tab-title="${safeTitle}" title="Save for later">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0 1 11.186 0Z" /></svg>
-        </button>
-        <button class="chip-action chip-close" data-action="close-single-tab" data-tab-url="${safeUrl}" title="Close this tab">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
-        </button>
-      </div>
+      <span class="chip-text">${label}</span>${dupeTag}${zzzBadge}
+      <div class="chip-actions">${actions}</div>
     </div>`;
   }).join('') + (extraCount > 0 ? buildOverflowChips(uniqueTabs.slice(8), urlCounts) : '');
 
@@ -972,14 +1678,37 @@ function renderDomainCard(group) {
       </button>`;
   }
 
+  // If this card is stale, add a "close stale" action
+  const groupHostname2 = group.domain === '__landing-pages__' ? '' : group.domain;
+  if (groupHostname2 && hostnameStaleness[groupHostname2]) {
+    const daysSince = Math.floor((Date.now() - hostnameStaleness[groupHostname2]) / 86400000);
+    if (daysSince >= 7) {
+      actionsHtml += `
+        <button class="action-btn" data-action="close-stale-domain" data-hostname="${groupHostname2}">
+          清理 ${daysSince >= 30 ? Math.floor(daysSince/30) + '个月' : daysSince + '天'}未读
+        </button>`;
+    }
+  }
+
+  // Add a "sleep" action button if domain has non-dormant tabs
+  const nonDormantCount = (group.tabs || []).filter(t => !t.discarded).length;
+  if (groupHostname2 && nonDormantCount > 0) {
+    actionsHtml += `
+      <button class="action-btn" data-action="sleep-domain" data-hostname="${groupHostname2}" title="休眠这些标签，节省内存">
+        💤 休眠
+      </button>`;
+  }
+
+  const hasAmberBar = hasDupes || (groupHostname2 && hostnameStaleness[groupHostname2] && Math.floor((Date.now() - hostnameStaleness[groupHostname2]) / 86400000) >= 7);
   return `
-    <div class="mission-card domain-card ${hasDupes ? 'has-amber-bar' : 'has-neutral-bar'}" data-domain-id="${stableId}" data-hostname="${isLanding ? '' : group.domain}">
+    <div class="mission-card domain-card ${hasAmberBar ? 'has-amber-bar' : 'has-neutral-bar'}" data-domain-id="${stableId}" data-hostname="${isLanding ? '' : group.domain}">
       <div class="status-bar"></div>
       <div class="mission-content">
         <div class="mission-top">
           <span class="mission-name">${isLanding ? 'Homepages' : (group.label || friendlyDomain(group.domain))}</span>
           ${tabBadge}
           ${dupeBadge}
+          ${staleBadge}
           ${timeBadge}
         </div>
         <div class="mission-pages">${pageChips}</div>
@@ -1238,19 +1967,36 @@ async function renderStaticDashboard() {
     return b.tabs.length - a.tabs.length;
   });
 
+  // --- Fetch staleness data from background (for tab age badges) ---
+  let hostnameStaleness = {};
+  try {
+    const resp = await chrome.runtime.sendMessage({ type: 'GET_STALENESS' });
+    hostnameStaleness = (resp && resp.hostnameLastFocus) ? resp.hostnameLastFocus : {};
+  } catch (e) {
+    console.warn('[tab-out] Failed to get staleness data:', e);
+  }
+
   // --- Render domain cards ---
   const openTabsSection      = document.getElementById('openTabsSection');
   const openTabsMissionsEl   = document.getElementById('openTabsMissions');
   const openTabsSectionCount = document.getElementById('openTabsSectionCount');
   const openTabsSectionTitle = document.getElementById('openTabsSectionTitle');
 
+  console.log('[DEBUG] renderStaticDashboard: domainGroups.length =', domainGroups.length, ', realTabs.length =', realTabs.length);
+
   if (domainGroups.length > 0 && openTabsSection) {
     if (openTabsSectionTitle) openTabsSectionTitle.textContent = 'Open tabs';
-    openTabsSectionCount.innerHTML = `${domainGroups.length} domain${domainGroups.length !== 1 ? 's' : ''} &nbsp;&middot;&nbsp; <button class="action-btn close-tabs" data-action="close-all-open-tabs" style="font-size:11px;padding:3px 10px;">${ICONS.close} Close all ${realTabs.length} tabs</button>`;
-    openTabsMissionsEl.innerHTML = domainGroups.map(g => renderDomainCard(g)).join('');
+    if (openTabsSectionCount) {
+      openTabsSectionCount.innerHTML = `${domainGroups.length} domain${domainGroups.length !== 1 ? 's' : ''} &nbsp;&middot;&nbsp; <button class="action-btn close-tabs" data-action="close-all-open-tabs" style="font-size:11px;padding:3px 10px;">${ICONS.close} Close all ${realTabs.length} tabs</button>`;
+    }
+    if (openTabsMissionsEl) {
+      openTabsMissionsEl.innerHTML = domainGroups.map(g => renderDomainCard(g, hostnameStaleness)).join('');
+    }
     openTabsSection.style.display = 'block';
+    console.log('[DEBUG] openTabsSection display set to block');
   } else if (openTabsSection) {
     openTabsSection.style.display = 'none';
+    console.log('[DEBUG] openTabsSection display set to none (domainGroups empty)');
   }
 
   // --- Footer stats ---
@@ -1259,6 +2005,12 @@ async function renderStaticDashboard() {
 
   // --- Check for duplicate Tab Out tabs ---
   checkTabOutDupes();
+
+  // --- Check for domain sprawl (too many distinct domains) ---
+  checkDomainSprwaw();
+
+  // --- Sync private mode state ---
+  await syncPrivateMode();
 
   // --- Render "Saved for Later" column ---
   await renderDeferredColumn();
@@ -1294,13 +2046,22 @@ document.addEventListener('click', async (e) => {
     viewBtn.classList.add('active');
 
     if (view === 'today') {
+      // Show heatmap when switching to Today view
+      const heatmapContainer = document.getElementById('heatmapContainer');
+      if (heatmapContainer) heatmapContainer.style.display = 'block';
+      console.log('[DEBUG] Switched to today, showing heatmap');
       await renderStaticDashboard();
+      await renderProductivityBanner('today');
+      renderHeatmap(); // intentionally not awaited
     } else {
-      // Hide open-tabs section title and count during stats view
-      const section = document.getElementById('openTabsSection');
-      if (section) section.style.display = 'block';
+      // Hide heatmap during stats view (week/month/year), but keep openTabsSection visible
+      const heatmapContainer = document.getElementById('heatmapContainer');
+      if (heatmapContainer) heatmapContainer.style.display = 'none';
+      console.log('[DEBUG] Switched to', view, ', hiding heatmap only');
       const stats = await getStatsData(view);
+      console.log('[DEBUG] getStatsData(' + view + ') returned:', stats ? stats.length + ' items' : 'null/undefined');
       renderStatsView(stats, view);
+      renderProductivityBanner(view); // intentionally not awaited — runs independently
     }
     return;
   }
@@ -1322,6 +2083,79 @@ document.addEventListener('click', async (e) => {
       setTimeout(() => { banner.style.display = 'none'; banner.style.opacity = '1'; }, 400);
     }
     showToast('Closed extra Tab Out tabs');
+    return;
+  }
+
+  // ---- Dismiss domain sprawl warning banner ----
+  if (action === 'dismiss-domain-sprwaw') {
+    const banner = document.getElementById('domainSprwawBanner');
+    if (banner) {
+      banner.style.transition = 'opacity 0.4s';
+      banner.style.opacity = '0';
+      setTimeout(() => { banner.style.display = 'none'; banner.style.opacity = '1'; }, 400);
+    }
+    return;
+  }
+
+  // ---- Toggle private / focus mode ----
+  if (action === 'toggle-private-mode') {
+    await togglePrivateMode();
+    return;
+  }
+
+  // ---- Close all tabs for a stale hostname ----
+  if (action === 'close-stale-domain') {
+    const hostname = actionEl.dataset.hostname;
+    if (!hostname) return;
+    // Find all tabs for this hostname and close them
+    const toClose = openTabs.filter(t => {
+      try {
+        const h = new URL(t.url).hostname.replace(/^www\./, '');
+        return h === hostname;
+      } catch { return false; }
+    });
+    const urls = toClose.map(t => t.url).filter(u => u && !u.startsWith('chrome'));
+    await closeTabsByUrls(urls);
+    playCloseSound();
+    showToast(`已关闭 ${hostname} 的 ${urls.length} 个未读标签`);
+    // Re-render
+    if (currentView === 'today') {
+      await renderStaticDashboard();
+    }
+    return;
+  }
+
+  // ---- Wake a dormant tab (clicking it restores it from sleep) ----
+  if (action === 'wake-tab') {
+    const tabId = parseInt(actionEl.dataset.tabId, 10);
+    if (!tabId) return;
+    try {
+      // Clicking the tab in Chrome will wake it up automatically
+      await chrome.tabs.update(tabId, { active: true });
+    } catch {}
+    return;
+  }
+
+  // ---- Put all tabs in a domain to sleep (discard) ----
+  if (action === 'sleep-domain') {
+    const hostname = actionEl.dataset.hostname;
+    if (!hostname) return;
+    const toSleep = openTabs.filter(t => {
+      if (t.discarded) return false;
+      try {
+        const h = new URL(t.url).hostname.replace(/^www\./, '');
+        return h === hostname;
+      } catch { return false; }
+    });
+    for (const tab of toSleep) {
+      try {
+        await chrome.tabs.discard(tab.id);
+      } catch {}
+    }
+    showToast(`${hostname} 的 ${toSleep.length} 个标签已进入休眠模式`);
+    if (currentView === 'today') {
+      await renderStaticDashboard();
+    }
     return;
   }
 
@@ -1554,6 +2388,139 @@ document.addEventListener('click', async (e) => {
     showToast('All tabs closed. Fresh start.');
     return;
   }
+
+  // ---- Stats view: temporarily hide a domain from view ----
+  if (action === 'hide-domain') {
+    const hostname = actionEl.dataset.hostname;
+    if (!hostname || hiddenDomains.includes(hostname)) return;
+    hiddenDomains.push(hostname);
+
+    // Remove the card with animation
+    const card = actionEl.closest('.mission-card');
+    if (card) {
+      card.style.transition = 'opacity 0.3s, transform 0.3s';
+      card.style.opacity = '0';
+      card.style.transform = 'scale(0.95)';
+      setTimeout(() => {
+        card.remove();
+        // If no more cards, show empty state
+        const remaining = document.querySelectorAll('#openTabsMissions .mission-card').length;
+        if (remaining === 0) {
+          const container = document.getElementById('openTabsMissions');
+          if (container) {
+            container.innerHTML = `
+              <div class="missions-empty-state">
+                <div class="empty-checkmark">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                  </svg>
+                </div>
+                <div class="empty-title">No history for this period</div>
+                <div class="empty-subtitle">Start browsing to see your stats here.</div>
+              </div>`;
+          }
+        }
+      }, 300);
+    }
+
+    showToast('已暂时隐藏，重新打开浏览器后恢复');
+    return;
+  }
+
+  // ---- Stats view: delete all history for a domain ----
+  if (action === 'delete-domain-history') {
+    const hostname = actionEl.dataset.hostname;
+    if (!hostname) return;
+
+    // Remove from hidden list if present
+    hiddenDomains = hiddenDomains.filter(h => h !== hostname);
+
+    await clearDomainHistory(hostname);
+
+    const card = actionEl.closest('.mission-card');
+    if (card) {
+      card.style.transition = 'opacity 0.3s, transform 0.3s';
+      card.style.opacity = '0';
+      card.style.transform = 'scale(0.95)';
+      setTimeout(() => card.remove(), 300);
+    }
+
+    showToast(`已删除 ${friendlyDomain(hostname)} 的历史记录`, 8000);
+    return;
+  }
+
+  // ---- Stats view: delete history AND add to privacy blocklist ----
+  if (action === 'block-domain') {
+    const hostname = actionEl.dataset.hostname;
+    if (!hostname) return;
+
+    // Remove from hidden list if present
+    hiddenDomains = hiddenDomains.filter(h => h !== hostname);
+
+    await clearDomainHistory(hostname);
+    await addToBlockedDomains(hostname);
+
+    const card = actionEl.closest('.mission-card');
+    if (card) {
+      card.style.transition = 'opacity 0.3s, transform 0.3s';
+      card.style.opacity = '0';
+      card.style.transform = 'scale(0.95)';
+      setTimeout(() => card.remove(), 300);
+    }
+
+    showToast(`已加入隐私名单，${friendlyDomain(hostname)} 以后不再统计`, 8000);
+    return;
+  }
+
+  // ---- Open settings panel ----
+  if (action === 'open-settings') {
+    await openSettingsPanel();
+    return;
+  }
+
+  // ---- Export all history ----
+  if (action === 'export-history') {
+    await exportAllHistory();
+    return;
+  }
+
+  // ---- Import history (trigger hidden file input) ----
+  if (action === 'import-history') {
+    const input = document.getElementById('importHistoryInput');
+    if (input) input.click();
+    return;
+  }
+
+  // ---- Close settings panel ----
+  if (action === 'close-settings') {
+    closeSettingsPanel();
+    return;
+  }
+
+  // ---- Remove a domain from the blocked list (from settings panel) ----
+  if (action === 'remove-blocked') {
+    const hostname = actionEl.dataset.hostname;
+    if (!hostname) return;
+
+    await removeFromBlockedDomains(hostname);
+
+    // Animate the item out
+    const item = actionEl.closest('.blocked-item');
+    if (item) {
+      item.style.transition = 'opacity 0.2s';
+      item.style.opacity = '0';
+      setTimeout(() => {
+        item.remove();
+        // Show empty state if no more items
+        const remaining = document.querySelectorAll('#blockedList .blocked-item').length;
+        const empty = document.getElementById('blockedEmpty');
+        if (remaining === 0 && empty) empty.style.display = 'block';
+      }, 200);
+    }
+
+    showToast(`已移出隐私名单，${friendlyDomain(hostname)} 恢复统计`);
+    return;
+  }
 });
 
 // ---- Archive toggle — expand/collapse the archive section ----
@@ -1566,6 +2533,15 @@ document.addEventListener('click', (e) => {
   if (body) {
     body.style.display = body.style.display === 'none' ? 'block' : 'none';
   }
+});
+
+// ---- Import history file input listener ----
+document.addEventListener('change', async (e) => {
+  if (e.target.id !== 'importHistoryInput') return;
+  const file = e.target.files?.[0];
+  if (!file) return;
+  await importHistory(file);
+  e.target.value = ''; // reset so same file can be imported again
 });
 
 // ---- Archive search — filter archived items as user types ----
@@ -1644,6 +2620,10 @@ function getDateRange(range) {
 async function getStatsData(range) {
   const { start, end } = getDateRange(range === 'today' ? 'day' : range);
 
+  // Load blocked domains from storage
+  const { blockedDomains: storedBlocked = [] } = await chrome.storage.local.get('blockedDomains');
+  blockedDomains = storedBlocked;
+
   // Collect all dailyHistory keys in storage
   const allKeys = await new Promise(resolve => {
     chrome.storage.local.get(null, items => {
@@ -1664,6 +2644,9 @@ async function getStatsData(range) {
     if (dateStr < start || dateStr > end) continue;
 
     const hostname = rest.slice(dot2 + 1);
+    // Skip blocked domains and __internal__ placeholder
+    if (blockedDomains.includes(hostname)) continue;
+    if (hostname === '__internal__') continue;
     const ms = (hostnameTotals[hostname] || 0) + (await chrome.storage.local.get(key))[key];
     hostnameTotals[hostname] = ms;
   }
@@ -1676,7 +2659,61 @@ async function getStatsData(range) {
     }))
     .sort((a, b) => b.totalMs - a.totalMs);
 
-  return result;
+  // Filter out temporarily hidden domains (session-only, not persisted)
+  return result.filter(item => !hiddenDomains.includes(item.hostname));
+}
+
+/**
+ * clearDomainHistory(hostname)
+ * Deletes all dailyHistory.{date}.{hostname} keys from storage.
+ */
+async function clearDomainHistory(hostname) {
+  const allKeys = await new Promise(resolve => {
+    chrome.storage.local.get(null, items => resolve(Object.keys(items)));
+  });
+  const prefix = 'dailyHistory.';
+  const toDelete = allKeys.filter(key => {
+    if (!key.startsWith(prefix)) return false;
+    const rest = key.slice(prefix.length);
+    const dot2 = rest.indexOf('.');
+    if (dot2 === -1) return false;
+    const h = rest.slice(dot2 + 1);
+    return h === hostname;
+  });
+  if (toDelete.length > 0) {
+    const removes = {};
+    toDelete.forEach(k => removes[k] = null);
+    await chrome.storage.local.set(removes);
+  }
+}
+
+/**
+ * addToBlockedDomains(hostname)
+ * Adds hostname to the persisted blocked list.
+ */
+async function addToBlockedDomains(hostname) {
+  const { blockedDomains: existing = [] } = await chrome.storage.local.get('blockedDomains');
+  if (!existing.includes(hostname)) {
+    await chrome.storage.local.set({ blockedDomains: [...existing, hostname] });
+  }
+}
+
+/**
+ * removeFromBlockedDomains(hostname)
+ * Removes hostname from the persisted blocked list.
+ */
+async function removeFromBlockedDomains(hostname) {
+  const { blockedDomains: existing = [] } = await chrome.storage.local.get('blockedDomains');
+  await chrome.storage.local.set({ blockedDomains: existing.filter(h => h !== hostname) });
+}
+
+/**
+ * getBlockedDomains()
+ * Loads the blocked list from storage.
+ */
+async function getBlockedDomains() {
+  const { blockedDomains: list = [] } = await chrome.storage.local.get('blockedDomains');
+  return list;
 }
 
 /**
@@ -1720,20 +2757,37 @@ function renderStatsView(stats, range) {
   }
 
   if (container) {
-    container.innerHTML = stats.map(item => `
-      <div class="mission-card domain-card has-neutral-bar">
+    container.innerHTML = stats.map(item => {
+      const safeHostname = item.hostname.replace(/"/g, '&quot;');
+      return `
+      <div class="mission-card domain-card has-neutral-bar" data-stats-hostname="${safeHostname}">
         <div class="status-bar"></div>
         <div class="mission-content">
           <div class="mission-top">
             <span class="mission-name">${item.friendlyName}</span>
             <span class="group-time-badge" style="font-size:11px;padding:3px 8px;">${formatDuration(item.totalMs)}</span>
           </div>
-          <div class="mission-pages" style="padding:8px 0;font-size:12px;color:var(--muted);">
+          <div class="mission-pages" style="padding:4px 0 8px;font-size:12px;color:var(--muted);">
             ${item.hostname}
+          </div>
+          <div class="stats-domain-actions">
+            <button class="stats-action-btn" data-action="hide-domain" data-hostname="${safeHostname}" title="暂时从统计视图移除，不清空时长">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" width="13" height="13"><path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 0 0 1.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.451 10.451 0 0 1 12 4.5c4.756 0 8.773 3.162 10.065 7.498a10.522 10.522 0 0 1-4.293 5.774M6.228 6.228 3 3m3.228 3.228 3.65 3.65m7.894 7.894L21 21m-3.228-3.228-3.65-3.65m0 0a3 3 0 1 0-4.243-4.243m4.242 4.242L9.88 9.88" /></svg>
+              隐藏
+            </button>
+            <button class="stats-action-btn" data-action="delete-domain-history" data-hostname="${safeHostname}" title="从统计视图移除，清空累计时长，下次从零开始">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" width="13" height="13"><path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" /></svg>
+              删除
+            </button>
+            <button class="stats-action-btn stats-action-block" data-action="block-domain" data-hostname="${safeHostname}" title="删除并加入隐私名单，以后不再统计">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" width="13" height="13"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 0 1 0 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a2.999 2.999 0 0 1 0-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375Z" /></svg>
+              隐私名单
+            </button>
           </div>
         </div>
       </div>
-    `).join('');
+    `;
+    }).join('');
   }
 }
 
@@ -1742,5 +2796,146 @@ function renderStatsView(stats, range) {
    ---------------------------------------------------------------- */
 let currentView = 'today'; // 'today' | 'week' | 'month' | 'year'
 
+/** @type {string[]} Temporarily hidden domains for current session (not persisted) */
+let hiddenDomains = [];
+
+/** @type {string[]} Permanently blocked domains loaded from storage */
+let blockedDomains = [];
+
 // Refresh timer display every second
 setInterval(refreshTimerDisplay, 1000);
+
+// Update privacy button tooltip when duration select changes
+const privateModeSelect = document.getElementById('privateModeSelect');
+if (privateModeSelect) {
+  privateModeSelect.addEventListener('change', updatePrivateModeTooltip);
+}
+
+// Language toggle button handler
+const langToggleBtn = document.getElementById('langToggleBtn');
+if (langToggleBtn) {
+  langToggleBtn.addEventListener('click', async () => {
+    const newLang = I18N.toggle();
+    updateLangFlag();
+    updateUIText();
+    console.log('[DEBUG] Language toggled to', newLang, ', currentView =', currentView);
+    // Re-render the current view to update all text
+    if (currentView === 'today') {
+      console.log('[DEBUG] Re-rendering today view after language toggle');
+      await renderStaticDashboard();
+      await renderProductivityBanner('today');
+      renderHeatmap();
+    } else {
+      // Hide heatmap during stats view
+      const heatmapContainer = document.getElementById('heatmapContainer');
+      if (heatmapContainer) heatmapContainer.style.display = 'none';
+      const stats = await getStatsData(currentView);
+      renderStatsView(stats, currentView);
+      renderProductivityBanner(currentView);
+    }
+    updatePrivateModeTooltip();
+  });
+}
+
+/**
+ * Update the language flag icon based on current language
+ */
+function updateLangFlag() {
+  const flagEl = document.getElementById('langFlag');
+  if (flagEl) {
+    flagEl.textContent = I18N.currentLang === 'en' ? '🇺🇸' : '🇨🇳';
+  }
+}
+
+/**
+ * Update all UI text elements based on current language
+ * Called when language is toggled
+ */
+function updateUIText() {
+  // Update "Time spent" header label
+  const timeSpentLabel = document.getElementById('headerTimeSpentLabel');
+  if (timeSpentLabel) {
+    timeSpentLabel.textContent = I18N.t('Time spent');
+  }
+
+  // Update view switcher buttons
+  const viewLabels = {
+    today: I18N.t('Today'),
+    week: I18N.t('This Week'),
+    month: I18N.t('This Month'),
+    year: I18N.t('This Year'),
+  };
+  document.querySelectorAll('.view-btn').forEach(btn => {
+    const view = btn.dataset.view;
+    if (view && viewLabels[view]) {
+      btn.textContent = viewLabels[view];
+    }
+  });
+
+  // Update section title
+  const sectionTitle = document.getElementById('openTabsSectionTitle');
+  if (sectionTitle) {
+    sectionTitle.textContent = I18N.t('Open tabs');
+  }
+
+  // Update privacy mode elements
+  const privateLabel = document.getElementById('privateModeLabel');
+  if (privateLabel && !privateModeActive) {
+    privateLabel.textContent = I18N.t('Private');
+  }
+
+  // Update private mode select options
+  const privateSelect = document.getElementById('privateModeSelect');
+  if (privateSelect) {
+    const options = privateSelect.querySelectorAll('option');
+    const labels = {
+      '15': I18N.currentLang === 'zh' ? '15 分钟' : '15 minutes',
+      '30': I18N.currentLang === 'zh' ? '30 分钟' : '30 minutes',
+      '60': I18N.currentLang === 'zh' ? '1 小时' : '1 hour',
+      '120': I18N.currentLang === 'zh' ? '2 小时' : '2 hours',
+      '480': I18N.currentLang === 'zh' ? '8 小时' : '8 hours',
+      'midnight': I18N.currentLang === 'zh' ? '到午夜' : 'Until midnight',
+    };
+    options.forEach(opt => {
+      if (labels[opt.value]) {
+        opt.textContent = labels[opt.value];
+      }
+    });
+  }
+
+  // Update private mode tooltip
+  updatePrivateModeTooltip();
+
+  // Update banners (they'll reset text when shown next time, but update current if visible)
+  checkTabOutDupes();
+  checkDomainSprwaw();
+
+  // Update deferred column
+  const deferredTitle = document.querySelector('#deferredColumn .section-header h2');
+  if (deferredTitle) {
+    deferredTitle.textContent = I18N.t('Saved for later');
+  }
+  const deferredEmpty = document.getElementById('deferredEmpty');
+  if (deferredEmpty) {
+    deferredEmpty.textContent = I18N.t('Nothing saved. Living in the moment.');
+  }
+  const archiveToggle = document.getElementById('archiveToggle');
+  if (archiveToggle) {
+    archiveToggle.childNodes[2].textContent = I18N.t('Archive');
+  }
+}
+
+// --- Initial render of dashboard content ---
+// Use async IIFE to properly await without blocking script execution
+(async () => {
+  try {
+    // Load language preference first
+    await I18N.load();
+    updateLangFlag();
+    await renderDashboard();
+    // Apply language-specific UI text after initial render
+    updateUIText();
+  } catch (err) {
+    console.error('[tab-out] Initial render failed:', err);
+  }
+})();

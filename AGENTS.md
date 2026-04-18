@@ -1,6 +1,6 @@
-# AGENTS.md -- Tab Out: Setup & Onboarding Guide for Coding Agents
+# AGENTS.md -- Tab Out (Extended Fork): Setup & Onboarding Guide for Coding Agents
 
-You're installing **Tab Out** for the user. Your job is not just to set it up -- it's to get them excited about using it.
+You're installing **Tab Out** (extended fork by [dengduck](https://github.com/dengduck/tab-out)) for the user. This fork adds history stats views (Today/Week/Month/Year), per-domain timer badges, productivity banners, and more. Your job is not just to set it up -- it's to get them excited about using it.
 
 ---
 
@@ -26,7 +26,7 @@ Before doing anything technical, tell the user what they're about to get:
 ## Step 1 -- Clone the repo
 
 ```bash
-git clone https://github.com/zarazhangrui/tab-out.git
+git clone https://github.com/dengduck/tab-out.git
 cd tab-out
 ```
 
