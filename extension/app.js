@@ -26,6 +26,95 @@
 // All open tabs — populated by fetchOpenTabs()
 let openTabs = [];
 
+// ─── Tab Timer State ───────────────────────────────────────────────────────────
+/** @type {Map<number, {hostname: string, title: string, totalTime: number}>} */
+let tabSessionData = {};
+
+/** Timestamp of last timer refresh */
+let lastTimerRefresh = Date.now();
+
+/**
+ * Query background.js for current session data (tab times).
+ * @returns {Promise<Object>} tabSessions object
+ */
+async function getTabSessionData() {
+  try {
+    const response = await chrome.runtime.sendMessage({ type: 'GET_SESSION_DATA' });
+    return response?.tabSessions || {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Format milliseconds into a human-readable duration string.
+ * - < 1 min:    "刚刚" / "计时中..."
+ * - < 1 hour:   "45分钟"
+ * - ≥ 1 hour:   "1.5小时"
+ * - ≥ 1 day:    "1天3小时"
+ * @param {number} ms - Duration in milliseconds
+ * @returns {string}
+ */
+function formatDuration(ms) {
+  if (ms < 0) ms = 0;
+  const seconds = Math.floor(ms / 1000);
+  if (seconds < 5) return '刚刚';
+  const minutes = Math.floor(ms / 60000);
+  if (minutes < 60) return `${minutes}分钟`;
+  const hours = minutes / 60;
+  if (hours < 24) {
+    return hours.toFixed(1).replace(/\.0$/, '') + '小时';
+  }
+  const days = Math.floor(hours / 24);
+  const remainingHours = Math.floor(hours % 24);
+  if (remainingHours === 0) {
+    return `${days}天`;
+  }
+  return `${days}天${remainingHours}小时`;
+}
+
+/**
+ * Refresh the timer display — called every second via setInterval.
+ * Updates header total time and all visible domain card times.
+ */
+async function refreshTimerDisplay() {
+  tabSessionData = await getTabSessionData();
+  lastTimerRefresh = Date.now();
+
+  // Update header total time
+  let totalMs = 0;
+  for (const tabId in tabSessionData) {
+    totalMs += (tabSessionData[tabId].totalTime || 0);
+  }
+
+  const totalEl = document.getElementById('totalWorkTime');
+  if (totalEl) {
+    totalEl.textContent = formatDuration(totalMs);
+  }
+
+  // Update per-group time in domain cards
+  // Group hostname → total time
+  const groupTimes = {};
+  for (const tabId in tabSessionData) {
+    const session = tabSessionData[tabId];
+    if (session.hostname && session.hostname !== '__internal__') {
+      groupTimes[session.hostname] = (groupTimes[session.hostname] || 0) + (session.totalTime || 0);
+    }
+  }
+
+  // Find each domain card and update its time badge
+  for (const hostname in groupTimes) {
+    const timeMs = groupTimes[hostname];
+    const card = document.querySelector(`.mission-card[data-hostname="${hostname}"]`);
+    if (card) {
+      const timeEl = card.querySelector('.group-time-badge');
+      if (timeEl) {
+        timeEl.textContent = formatDuration(timeMs);
+      }
+    }
+  }
+}
+
 /**
  * fetchOpenTabs()
  *
@@ -818,6 +907,12 @@ function renderDomainCard(group) {
     ${tabCount} tab${tabCount !== 1 ? 's' : ''} open
   </span>`;
 
+  // Time badge — shows cumulative time spent on this group
+  const groupHostname = group.domain === '__landing-pages__' ? '' : group.domain;
+  const timeBadge = groupHostname
+    ? `<span class="group-time-badge" data-hostname="${groupHostname}">—</span>`
+    : '';
+
   const dupeBadge = hasDupes
     ? `<span class="open-tabs-badge" style="color:var(--accent-amber);background:rgba(200,113,58,0.08);">
         ${totalExtras} duplicate${totalExtras !== 1 ? 's' : ''}
@@ -878,13 +973,14 @@ function renderDomainCard(group) {
   }
 
   return `
-    <div class="mission-card domain-card ${hasDupes ? 'has-amber-bar' : 'has-neutral-bar'}" data-domain-id="${stableId}">
+    <div class="mission-card domain-card ${hasDupes ? 'has-amber-bar' : 'has-neutral-bar'}" data-domain-id="${stableId}" data-hostname="${isLanding ? '' : group.domain}">
       <div class="status-bar"></div>
       <div class="mission-content">
         <div class="mission-top">
           <span class="mission-name">${isLanding ? 'Homepages' : (group.label || friendlyDomain(group.domain))}</span>
           ${tabBadge}
           ${dupeBadge}
+          ${timeBadge}
         </div>
         <div class="mission-pages">${pageChips}</div>
         <div class="actions">${actionsHtml}</div>
@@ -1166,6 +1262,9 @@ async function renderStaticDashboard() {
 
   // --- Render "Saved for Later" column ---
   await renderDeferredColumn();
+
+  // --- Initial timer refresh (then auto-refresh every second) ---
+  await refreshTimerDisplay();
 }
 
 async function renderDashboard() {
@@ -1480,3 +1579,6 @@ document.addEventListener('input', async (e) => {
    INITIALIZE
    ---------------------------------------------------------------- */
 renderDashboard();
+
+// Refresh timer display every second
+setInterval(refreshTimerDisplay, 1000);

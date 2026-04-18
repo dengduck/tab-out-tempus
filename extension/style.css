@@ -64,6 +64,15 @@ header {
   border-bottom: 1px solid var(--warm-gray);
 }
 
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 48px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--warm-gray);
+}
+
 .header-left h1 {
   font-family: 'Newsreader', serif;
   font-weight: 300;
@@ -71,6 +80,45 @@ header {
   letter-spacing: -0.5px;
   color: var(--ink);
   margin-bottom: 4px;
+}
+
+/* ─── Header Timer ─── */
+.header-timer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'Newsreader', serif;
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--muted);
+  letter-spacing: 0.3px;
+}
+
+.header-timer-icon {
+  opacity: 0.5;
+}
+
+.header-timer-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.header-timer-value {
+  font-variant-numeric: tabular-nums;
+  color: var(--accent-sage);
+  font-weight: 500;
+}
+
+/* ─── Group Time Badge ─── */
+.group-time-badge {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--accent-sage);
+  background: rgba(90, 122, 98, 0.08);
+  padding: 2px 7px;
+  border-radius: 3px;
+  letter-spacing: 0.3px;
+  font-variant-numeric: tabular-nums;
 }
 
 .header-left .date {
