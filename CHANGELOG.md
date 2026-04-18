@@ -4,6 +4,21 @@ All notable changes to **Tab Out** (our fork with custom features) are documente
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.2.0] — 2026-04-19
+
+### Fixed
+- **Heatmap overlay bug** — Switching to Week/Month/Year views now correctly hides the heatmap; switching back restores it. Language toggle also properly resets heatmap visibility per view.
+
+### Added
+- **docs/** — Project knowledge base for AI collaborators: PROJECT.md, ARCHITECTURE.md, DEBUGGING.md, DEV_GUIDE.md.
+- **README.md bilingual header** — Added Chinese introduction at the top.
+- **Fork attribution** — README and AGENTS.md now reference the extended fork by [dengduck](https://github.com/dengduck/tab-out).
+
+### Changed
+- AGENTS.md updated to point to `https://github.com/dengduck/tab-out` instead of upstream.
+
+---
+
 ## [1.1.0] — 2026-04-18
 
 ### Added
