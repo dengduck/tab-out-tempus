@@ -1,3 +1,5 @@
+**Language:** English | [简体中文](README.zh-CN.md)
+
 # Tab Out Tempus
 
 **Keep tabs on your tabs.**
@@ -8,22 +10,12 @@ No server. No account. No external API calls. Just a Chrome extension.
 
 ---
 
-## 中文介绍
-
-Tab Out Tempus 是一个 Chrome 新标签页扩展，将所有打开的标签页按域名分组展示。Homepages（Gmail、X、LinkedIn 等）自动归入专属分组。支持关闭动画、重复标签检测、Save for Later、历史统计等功能。完全本地运行，无服务器、无账号、无外部请求。
-
----
-
-## Install with a coding agent
-
----
-
 ## Install with a coding agent
 
 Send your coding agent (Claude Code, Codex, etc.) this repo and say **"install this"**:
 
 ```
-https://github.com/dengduck/tab-out
+https://github.com/dengduck/tab-out-tempus
 ```
 
 The agent will walk you through it. Takes about 1 minute.
@@ -69,7 +61,7 @@ The agent will walk you through it. Takes about 1 minute.
 **1. Clone the repo**
 
 ```bash
-git clone https://github.com/zarazhangrui/tab-out.git
+git clone https://github.com/dengduck/tab-out-tempus.git
 ```
 
 **2. Load the Chrome extension**
@@ -117,4 +109,4 @@ Everything runs inside the Chrome extension. No external server, no API calls, n
 
 ## License
 
-MIT License. Built by [Zara](https://x.com/zarazhangrui). Extended fork by [dengduck](https://github.com/dengduck/tab-out) as **Tab Out Tempus**.
+MIT License. Built by [Zara](https://x.com/zarazhangrui). Extended fork by [dengduck](https://github.com/dengduck/tab-out-tempus) as **Tab Out Tempus**.

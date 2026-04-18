@@ -1,6 +1,6 @@
 # Tab Out Tempus — Project Overview
 
-> **fork**: https://github.com/dengduck/tab-out
+> **fork**: https://github.com/dengduck/tab-out-tempus
 > **upstream**: https://github.com/zarazhangrui/tab-out
 > **工作目录**: `/Users/jundeng/WorkBuddy/20260418032939/tab-out`
 

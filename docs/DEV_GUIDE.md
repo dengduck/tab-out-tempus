@@ -9,8 +9,8 @@
 ### 1. 克隆仓库
 
 ```bash
-git clone https://github.com/dengduck/tab-out.git
-cd tab-out
+git clone https://github.com/dengduck/tab-out-tempus.git
+cd tab-out-tempus
 ```
 
 ### 2. 安装 Chrome 扩展
@@ -60,8 +60,8 @@ git remote add upstream https://github.com/zarazhangrui/tab-out.git
 
 # 确认 remote 配置
 git remote -v
-# origin   https://github.com/dengduck/tab-out.git (fetch)
-# origin   https://github.com/dengduck/tab-out.git (push)
+# origin   https://github.com/dengduck/tab-out-tempus.git (fetch)
+# origin   https://github.com/dengduck/tab-out-tempus.git (push)
 # upstream https://github.com/zarazhangrui/tab-out.git (fetch)
 # upstream https://github.com/zarazhangrui/tab-out.git (push)
 
@@ -287,4 +287,4 @@ git diff our-features..main
 - [chrome.storage API](https://developer.chrome.com/docs/extensions/reference/api/storage)
 - [chrome.tabs API](https://developer.chrome.com/docs/extensions/reference/api/tabs)
 - [Tab Out Tempus 上游仓库](https://github.com/zarazhangrui/tab-out)
-- [Tab Out Tempus Fork 仓库](https://github.com/dengduck/tab-out)
+- [Tab Out Tempus Fork 仓库](https://github.com/dengduck/tab-out-tempus)
