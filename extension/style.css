@@ -109,6 +109,48 @@ header {
   font-weight: 500;
 }
 
+/* ─── Header Right (timer + view switcher) ─── */
+.header-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+/* ─── View Switcher ─── */
+.view-switcher {
+  display: flex;
+  gap: 4px;
+  background: var(--warm-gray);
+  border-radius: 8px;
+  padding: 3px;
+}
+
+.view-btn {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  background: none;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+  letter-spacing: 0.2px;
+}
+
+.view-btn:hover {
+  color: var(--ink);
+  background: rgba(255,255,255,0.5);
+}
+
+.view-btn.active {
+  background: var(--card-bg);
+  color: var(--ink);
+  box-shadow: 0 1px 3px var(--shadow);
+}
+
 /* ─── Group Time Badge ─── */
 .group-time-badge {
   font-size: 10px;

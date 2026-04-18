@@ -26,14 +26,23 @@
       <!-- "Friday, April 4, 2026" — written by getDateDisplay() in app.js -->
       <div class="date" id="dateDisplay"></div>
     </div>
-    <div class="header-timer">
-      <span class="header-timer-icon">
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-        </svg>
-      </span>
-      <span>已工作</span>
-      <span class="header-timer-value" id="totalWorkTime">—</span>
+    <div class="header-right">
+      <div class="header-timer">
+        <span class="header-timer-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+          </svg>
+        </span>
+        <span>已工作</span>
+        <span class="header-timer-value" id="totalWorkTime">—</span>
+      </div>
+      <!-- View switcher: Today / Week / Month / Year -->
+      <div class="view-switcher" id="viewSwitcher">
+        <button class="view-btn active" data-view="today">Today</button>
+        <button class="view-btn" data-view="week">Week</button>
+        <button class="view-btn" data-view="month">Month</button>
+        <button class="view-btn" data-view="year">Year</button>
+      </div>
     </div>
   </header>
 

@@ -27,7 +27,7 @@
 let openTabs = [];
 
 // ─── Tab Timer State ───────────────────────────────────────────────────────────
-/** @type {Map<number, {hostname: string, title: string, totalTime: number}>} */
+/** @type {Object.<string, {hostname: string, title: string, totalTime: number}>} */
 let tabSessionData = {};
 
 /** Timestamp of last timer refresh */
@@ -83,8 +83,9 @@ async function refreshTimerDisplay() {
 
   // Update header total time
   let totalMs = 0;
-  for (const tabId in tabSessionData) {
-    totalMs += (tabSessionData[tabId].totalTime || 0);
+  const sessions = Object.values(tabSessionData);
+  for (const session of sessions) {
+    totalMs += (session.totalTime || 0);
   }
 
   const totalEl = document.getElementById('totalWorkTime');
@@ -95,8 +96,7 @@ async function refreshTimerDisplay() {
   // Update per-group time in domain cards
   // Group hostname → total time
   const groupTimes = {};
-  for (const tabId in tabSessionData) {
-    const session = tabSessionData[tabId];
+  for (const session of Object.values(tabSessionData)) {
     if (session.hostname && session.hostname !== '__internal__') {
       groupTimes[session.hostname] = (groupTimes[session.hostname] || 0) + (session.totalTime || 0);
     }
@@ -1281,6 +1281,30 @@ async function renderDashboard() {
    ---------------------------------------------------------------- */
 
 document.addEventListener('click', async (e) => {
+  // ---- View switcher ----
+  const viewBtn = e.target.closest('.view-btn');
+  if (viewBtn) {
+    const view = viewBtn.dataset.view;
+    if (!view) return;
+
+    currentView = view;
+
+    // Update active button
+    document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+    viewBtn.classList.add('active');
+
+    if (view === 'today') {
+      await renderStaticDashboard();
+    } else {
+      // Hide open-tabs section title and count during stats view
+      const section = document.getElementById('openTabsSection');
+      if (section) section.style.display = 'block';
+      const stats = await getStatsData(view);
+      renderStatsView(stats, view);
+    }
+    return;
+  }
+
   // Walk up the DOM to find the nearest element with data-action
   const actionEl = e.target.closest('[data-action]');
   if (!actionEl) return;
@@ -1576,9 +1600,147 @@ document.addEventListener('input', async (e) => {
 
 
 /* ----------------------------------------------------------------
+   HISTORY STATS — chrome.storage.local aggregation
+   ---------------------------------------------------------------- */
+
+/**
+ * getDateRange(range)
+ * Returns start and end ISO date strings for the given range.
+ * @param {'week'|'month'|'year'} range
+ * @returns {{ start: string, end: string }}
+ */
+function getDateRange(range) {
+  const now = new Date();
+  const end = now.toISOString().split('T')[0];
+  let start;
+
+  if (range === 'week') {
+    const d = new Date(now);
+    d.setDate(d.getDate() - 7);
+    start = d.toISOString().split('T')[0];
+  } else if (range === 'month') {
+    const d = new Date(now);
+    d.setDate(d.getDate() - 30);
+    start = d.toISOString().split('T')[0];
+  } else if (range === 'year') {
+    const d = new Date(now);
+    d.setDate(d.getDate() - 365);
+    start = d.toISOString().split('T')[0];
+  } else {
+    // 'day' or 'today' — today only
+    start = end;
+  }
+
+  return { start, end };
+}
+
+/**
+ * getStatsData(range)
+ * Reads all dailyHistory entries for the given range and aggregates
+ * by hostname. Returns sorted array { hostname, totalMs }.
+ * @param {'today'|'week'|'month'|'year'} range
+ * @returns {Promise<Array<{hostname: string, totalMs: number, friendlyName: string}>>}
+ */
+async function getStatsData(range) {
+  const { start, end } = getDateRange(range === 'today' ? 'day' : range);
+
+  // Collect all dailyHistory keys in storage
+  const allKeys = await new Promise(resolve => {
+    chrome.storage.local.get(null, items => {
+      resolve(Object.keys(items));
+    });
+  });
+
+  const hostnameTotals = {};
+  const prefix = 'dailyHistory.';
+
+  for (const key of allKeys) {
+    if (!key.startsWith(prefix)) continue;
+    // key format: dailyHistory.YYYY-MM-DD.hostname
+    const rest = key.slice(prefix.length);
+    const dot2 = rest.indexOf('.');
+    if (dot2 === -1) continue;
+    const dateStr = rest.slice(0, dot2);
+    if (dateStr < start || dateStr > end) continue;
+
+    const hostname = rest.slice(dot2 + 1);
+    const ms = (hostnameTotals[hostname] || 0) + (await chrome.storage.local.get(key))[key];
+    hostnameTotals[hostname] = ms;
+  }
+
+  const result = Object.entries(hostnameTotals)
+    .map(([hostname, totalMs]) => ({
+      hostname,
+      totalMs,
+      friendlyName: friendlyDomain(hostname),
+    }))
+    .sort((a, b) => b.totalMs - a.totalMs);
+
+  return result;
+}
+
+/**
+ * renderStatsView(stats)
+ * Renders the history stats panel replacing the open-tabs grid.
+ * @param {Array<{hostname: string, totalMs: number, friendlyName: string}>} stats
+ * @param {'today'|'week'|'month'|'year'} range
+ */
+function renderStatsView(stats, range) {
+  const container = document.getElementById('openTabsMissions');
+  const titleEl = document.getElementById('openTabsSectionTitle');
+  const countEl = document.getElementById('openTabsSectionCount');
+
+  if (titleEl) {
+    const labels = { today: 'Today', week: 'This Week', month: 'This Month', year: 'This Year' };
+    titleEl.textContent = labels[range] || range;
+  }
+
+  if (!stats || stats.length === 0) {
+    if (countEl) countEl.textContent = 'No data yet';
+    if (container) {
+      container.innerHTML = `
+        <div class="missions-empty-state">
+          <div class="empty-checkmark">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+            </svg>
+          </div>
+          <div class="empty-title">No history for this period</div>
+          <div class="empty-subtitle">Start browsing to see your stats here.</div>
+        </div>
+      `;
+    }
+    return;
+  }
+
+  const totalMs = stats.reduce((s, e) => s + e.totalMs, 0);
+
+  if (countEl) {
+    countEl.innerHTML = `<span class="stat-num" style="font-size:14px">${formatDuration(totalMs)}</span> total &nbsp;&middot;&nbsp; <span class="stat-num" style="font-size:14px">${stats.length}</span> domains`;
+  }
+
+  if (container) {
+    container.innerHTML = stats.map(item => `
+      <div class="mission-card domain-card has-neutral-bar">
+        <div class="status-bar"></div>
+        <div class="mission-content">
+          <div class="mission-top">
+            <span class="mission-name">${item.friendlyName}</span>
+            <span class="group-time-badge" style="font-size:11px;padding:3px 8px;">${formatDuration(item.totalMs)}</span>
+          </div>
+          <div class="mission-pages" style="padding:8px 0;font-size:12px;color:var(--muted);">
+            ${item.hostname}
+          </div>
+        </div>
+      </div>
+    `).join('');
+  }
+}
+
+/* ----------------------------------------------------------------
    INITIALIZE
    ---------------------------------------------------------------- */
-renderDashboard();
+let currentView = 'today'; // 'today' | 'week' | 'month' | 'year'
 
 // Refresh timer display every second
 setInterval(refreshTimerDisplay, 1000);
