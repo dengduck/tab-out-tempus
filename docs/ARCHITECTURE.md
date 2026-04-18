@@ -1,10 +1,10 @@
-# Tab Out — Architecture & Data Flow
+# Tab Out Tempus — Architecture & Data Flow
 
 ---
 
 ## 系统架构概览
 
-Tab Out 由两个主要模块组成：
+Tab Out Tempus 由两个主要模块组成：
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -220,7 +220,7 @@ const { sessionData } = await chrome.storage.local.get('sessionData');
 | `getStatsData()` | app.js | 从 storage 读取并聚合历史数据 |
 | `refreshTimerDisplay()` | app.js | 每秒刷新域名卡片上的计时徽章 |
 | `checkDomainSprwaw()` | app.js | 域名分散警告 |
-| `checkTabOutDupes()` | app.js | Tab Out 自身标签页重复检测 |
+| `checkTempusDupes()` | app.js | Tab Out Tempus 自身标签页重复检测 |
 | `recordTab()` | background.js | 记录标签 hostname/title |
 | `activateTab()` | background.js | 切换标签页处理 |
 | `finalizePreviousTab()` | background.js | 写入 elapsed 到 dailyHistory |
@@ -232,7 +232,7 @@ const { sessionData } = await chrome.storage.local.get('sessionData');
 
 ## 扩展页面刷新机制
 
-Tab Out 是**被动刷新**的（没有轮询），刷新时机：
+Tab Out Tempus 是**被动刷新**的（没有轮询），刷新时机：
 
 | 触发条件 | 刷新函数 |
 |---------|---------|

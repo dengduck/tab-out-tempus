@@ -58,15 +58,6 @@ body::before {
 header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 48px;
-  padding-bottom: 24px;
-  border-bottom: 1px solid var(--warm-gray);
-}
-
-header {
-  display: flex;
-  justify-content: space-between;
   align-items: flex-end;
   margin-bottom: 48px;
   padding-bottom: 24px;
@@ -115,6 +106,13 @@ header {
   flex-direction: column;
   align-items: flex-end;
   gap: 10px;
+}
+
+/* ─── Header Actions Row (lang toggle + settings, same line) ─── */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 /* ─── View Switcher ─── */
@@ -295,17 +293,6 @@ header {
   text-align: center;
   flex: 1;
   min-width: 0;
-}
-
-.heatmap-label-corner {
-  /* empty top-left corner cell */
-}
-
-.heatmap-hour-label {
-  font-family: 'DM Sans', sans-serif;
-  font-size: 9px;
-  color: var(--muted);
-  text-align: center;
 }
 
 .heatmap-body {

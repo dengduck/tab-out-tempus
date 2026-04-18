@@ -162,16 +162,24 @@ chrome.tabs.onCreated.addListener(async (tab) => {
 // Tab removed — finalize its time and remove from tracking
 chrome.tabs.onRemoved.addListener(async (tabId) => {
   const session = tabSessions.get(tabId);
-  if (session && currentSessionStart !== null) {
+  if (session) {
+    // If the closed tab is the ACTIVE tab, finalize its running time first
+    const isActiveTab = (currentActiveTabId === tabId);
+    let totalForTab = session.totalTime;
+    if (isActiveTab && currentSessionStart !== null) {
+      totalForTab += Date.now() - currentSessionStart;
+    }
+    // Note: if the closed tab is NOT the active tab, session.totalTime is
+    // already finalized by finalizePreviousTab() when user switched away,
+    // so we just use it as-is.
+
     // Skip writing for blocked domains
     const { blockedDomains = [] } = await chrome.storage.local.get('blockedDomains');
-    if (!blockedDomains.includes(session.hostname)) {
-      // Add any unrecorded time to history
-      const elapsed = Date.now() - currentSessionStart;
+    if (!blockedDomains.includes(session.hostname) && totalForTab > 0) {
       const today = new Date().toISOString().split('T')[0];
       const key = `dailyHistory.${today}.${session.hostname}`;
       const stored = await chrome.storage.local.get(key);
-      await chrome.storage.local.set({ [key]: (stored[key] || 0) + session.totalTime + elapsed });
+      await chrome.storage.local.set({ [key]: (stored[key] || 0) + totalForTab });
       hostnameLastFocus.set(session.hostname, Date.now());
     }
   }
@@ -304,12 +312,9 @@ async function updateBadge() {
 // Initial badge
 updateBadge();
 
-// Also update badge when extension starts
-chrome.runtime.onInstalled.addListener(() => { updateBadge(); });
-
 // ─── Message Handler (for app.js to query session data) ──────────────────────
 
-chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'GET_SESSION_DATA') {
     // Return all tracked tab sessions
     const result = {};
@@ -330,6 +335,7 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
     }
 
     sendResponse({ tabSessions: result });
+    return true;
   }
 
   // ── Private mode: enable with duration in minutes (or 'midnight') ──
@@ -369,18 +375,20 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
   // ── Get hourly heatmap data for a specific date ──
   if (message.type === 'GET_HOURLY_DATA') {
     const targetDate = message.date || new Date().toISOString().split('T')[0];
-    // Get all storage keys that are hourlyData.*
-    const allKeys = await new Promise(resolve => chrome.storage.local.get(null, items => resolve(Object.keys(items))));
-    const hKeys = allKeys.filter(k => k.startsWith('hourlyData.'));
-    const result = {};
-    for (const hKey of hKeys) {
-      const hostname = hKey.replace('hourlyData.', '');
-      const stored = await new Promise(resolve => chrome.storage.local.get(hKey, r => resolve(r[hKey])));
-      if (stored && stored[targetDate]) {
-        result[hostname] = stored[targetDate];
+    // Use Promise chain to handle async storage access
+    chrome.storage.local.get(null, (items) => {
+      const allKeys = Object.keys(items);
+      const hKeys = allKeys.filter(k => k.startsWith('hourlyData.'));
+      const result = {};
+      for (const hKey of hKeys) {
+        const hostname = hKey.replace('hourlyData.', '');
+        const stored = items[hKey];
+        if (stored && stored[targetDate]) {
+          result[hostname] = stored[targetDate];
+        }
       }
-    }
-    sendResponse({ hourlyData: result, date: targetDate });
+      sendResponse({ hourlyData: result, date: targetDate });
+    });
     return true;
   }
 
@@ -388,12 +396,15 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
   if (message.type === 'DISCARD_TAB') {
     const tabId = message.tabId;
     if (tabId != null) {
-      try {
-        await chrome.tabs.discard(tabId);
+      chrome.tabs.discard(tabId).then(() => {
         dormantTabIds.add(tabId);
-      } catch {}
+        sendResponse({});
+      }).catch(() => {
+        sendResponse({});
+      });
+    } else {
+      sendResponse({});
     }
-    sendResponse({});
     return true;
   }
 

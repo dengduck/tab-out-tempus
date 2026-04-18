@@ -1,8 +1,8 @@
-# Tab Out
+# Tab Out Tempus
 
 **Keep tabs on your tabs.**
 
-Tab Out is a Chrome extension that replaces your new tab page with a dashboard of everything you have open. Tabs are grouped by domain, with homepages (Gmail, X, LinkedIn, etc.) pulled into their own group. Close tabs with a satisfying swoosh + confetti.
+Tab Out Tempus is a Chrome extension that replaces your new tab page with a dashboard of everything you have open. Tabs are grouped by domain, with homepages (Gmail, X, LinkedIn, etc.) pulled into their own group. Close tabs with a satisfying swoosh + confetti.
 
 No server. No account. No external API calls. Just a Chrome extension.
 
@@ -10,7 +10,7 @@ No server. No account. No external API calls. Just a Chrome extension.
 
 ## 中文介绍
 
-Tab Out 是一个 Chrome 新标签页扩展，将所有打开的标签页按域名分组展示。Homepages（Gmail、X、LinkedIn 等）自动归入专属分组。支持关闭动画、重复标签检测、Save for Later、历史统计等功能。完全本地运行，无服务器、无账号、无外部请求。
+Tab Out Tempus 是一个 Chrome 新标签页扩展，将所有打开的标签页按域名分组展示。Homepages（Gmail、X、LinkedIn 等）自动归入专属分组。支持关闭动画、重复标签检测、Save for Later、历史统计等功能。完全本地运行，无服务器、无账号、无外部请求。
 
 ---
 
@@ -81,7 +81,7 @@ git clone https://github.com/zarazhangrui/tab-out.git
 
 **3. Open a new tab**
 
-You'll see Tab Out.
+You'll see Tab Out Tempus.
 
 ---
 
@@ -89,7 +89,7 @@ You'll see Tab Out.
 
 ```
 You open a new tab
-  -> Tab Out shows your open tabs grouped by domain
+  -> Tab Out Tempus shows your open tabs grouped by domain
   -> Homepages (Gmail, X, etc.) get their own group at the top
   -> Click any tab title to jump to it
   -> Close groups you're done with (swoosh + confetti)
@@ -117,4 +117,4 @@ Everything runs inside the Chrome extension. No external server, no API calls, n
 
 ## License
 
-MIT License. Built by [Zara](https://x.com/zarazhangrui). Extended fork by [dengduck](https://github.com/dengduck/tab-out).
+MIT License. Built by [Zara](https://x.com/zarazhangrui). Extended fork by [dengduck](https://github.com/dengduck/tab-out) as **Tab Out Tempus**.

@@ -1,6 +1,6 @@
-# Tab Out — Developer Guide
+# Tab Out Tempus — Developer Guide
 
-> 本文档面向参与 Tab Out 开发的 AI Agent 和人类开发者。记录开发流程、Git 策略、代码规范和注意事项。
+> 本文档面向参与 Tab Out Tempus 开发的 AI Agent 和人类开发者。记录开发流程、Git 策略、代码规范和注意事项。
 
 ---
 
@@ -32,12 +32,12 @@ open "chrome://extensions"
 
 ### 3. 验证安装
 
-打开新标签页，应能看到 Tab Out 界面。关闭 Chrome 扩展页，再次打开新标签页即可。
+打开新标签页，应能看到 Tab Out Tempus 界面。关闭 Chrome 扩展页，再次打开新标签页即可。
 
 ### 4. 调试
 
-- **前端日志**：`chrome://extensions` → Tab Out → "打开扩展的页面"
-- **SW 日志**：`chrome://extensions` → Tab Out → "Service Worker" 链接
+- **前端日志**：`chrome://extensions` → Tab Out Tempus → "打开扩展的页面"
+- **SW 日志**：`chrome://extensions` → Tab Out Tempus → "Service Worker" 链接
 
 ---
 
@@ -208,7 +208,7 @@ if (view === 'today') {
 
 ### ⚠️ 不要修改工作区文件夹名称
 
-如果使用 WorkBuddy 等工具，**不要修改包含 tab-out 的工作区文件夹名称**，否则工具链可能失效。
+如果使用 WorkBuddy 等工具，**不要修改包含 tab-out-tempus 的工作区文件夹名称**，否则工具链可能失效。
 
 ---
 
@@ -286,5 +286,5 @@ git diff our-features..main
 - [Chrome Manifest V3 文档](https://developer.chrome.com/docs/extensions/mv3/)
 - [chrome.storage API](https://developer.chrome.com/docs/extensions/reference/api/storage)
 - [chrome.tabs API](https://developer.chrome.com/docs/extensions/reference/api/tabs)
-- [Tab Out 上游仓库](https://github.com/zarazhangrui/tab-out)
-- [Tab Out Fork 仓库](https://github.com/dengduck/tab-out)
+- [Tab Out Tempus 上游仓库](https://github.com/zarazhangrui/tab-out)
+- [Tab Out Tempus Fork 仓库](https://github.com/dengduck/tab-out)

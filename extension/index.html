@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tab Out</title>
+  <title>Tab Out Tempus</title>
 
   <!-- Google Fonts: Newsreader (for headings/numbers) + DM Sans (for body text) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -38,19 +38,19 @@
       </div>
       <!-- Private / Focus mode toggle -->
       <div class="private-mode-wrap" id="privateModeWrap">
-        <button class="private-mode-btn" id="privateModeBtn" data-action="toggle-private-mode" title="隐私模式：暂停计时">
+        <button class="private-mode-btn" id="privateModeBtn" data-action="toggle-private-mode" title="Private mode: pause tracking">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z" />
           </svg>
           <span id="privateModeLabel">Private</span>
         </button>
-        <select class="private-mode-select" id="privateModeSelect" title="选择隐私模式持续时间">
-          <option value="15">15 分钟</option>
-          <option value="30">30 分钟</option>
-          <option value="60" selected>1 小时</option>
-          <option value="120">2 小时</option>
-          <option value="480">8 小时</option>
-          <option value="midnight">到午夜</option>
+        <select class="private-mode-select" id="privateModeSelect" title="Select privacy mode duration">
+          <option value="15">15 minutes</option>
+          <option value="30">30 minutes</option>
+          <option value="60" selected>1 hour</option>
+          <option value="120">2 hours</option>
+          <option value="480">8 hours</option>
+          <option value="midnight">Until midnight</option>
         </select>
       </div>
       <!-- View switcher: Today / Week / Month / Year -->
@@ -60,20 +60,21 @@
         <button class="view-btn" data-view="month">Month</button>
         <button class="view-btn" data-view="year">Year</button>
       </div>
-      <!-- Language toggle button -->
-      <button class="lang-toggle-btn" id="langToggleBtn" title="切换语言 / Switch Language">
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" width="16" height="16">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9.004 9.004 0 0 0 8.716-6.747M12 21a9.004 9.004 0 0 1-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 0 1 7.843 4.582M12 3a8.997 8.997 0 0 0-7.843 4.582m15.686 0A11.953 11.953 0 0 1 12 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0 1 21 12c0 .778-.099 1.533-.29 2.253m0 0A17.919 17.919 0 0 1 12 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 0 1 3 12c0-1.605.42-3.113 1.157-4.418" />
-        </svg>
-        <span id="langFlag">🇺🇸</span>
-      </button>
-      <!-- Settings button -->
-      <button class="settings-btn" id="settingsBtn" data-action="open-settings" title="设置">
+      <!-- Language toggle + Settings button (same row) -->
+      <div class="header-actions">
+        <button class="lang-toggle-btn" id="langToggleBtn" title="切换语言 / Switch Language">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" width="16" height="16">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9.004 9.004 0 0 0 8.716-6.747M12 21a9.004 9.004 0 0 1-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 0 1 7.843 4.582M12 3a8.997 8.997 0 0 0-7.843 4.582m15.686 0A11.953 11.953 0 0 1 12 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0 1 21 12c0 .778-.099 1.533-.29 2.253m0 0A17.919 17.919 0 0 1 12 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 0 1 3 12c0-1.605.42-3.113 1.157-4.418" />
+          </svg>
+          <span id="langFlag">🇺🇸</span>
+        </button>
+        <button class="settings-btn" id="settingsBtn" data-action="open-settings" title="Settings">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" />
           <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
         </svg>
-      </button>
+        </button>
+      </div><!-- end .header-actions -->
     </div>
   </header>
 
@@ -81,7 +82,7 @@
        DOMAIN SPRAWL BANNER — appears when too many domains are open at once
        Hidden by default; app.js shows it when distinct domain count > 8
        ================================================================ -->
-  <div class="tab-cleanup-banner" id="domainSprwawBanner" style="display:none">
+  <div class="tab-cleanup-banner" id="domainSprawlBanner" style="display:none">
     <div class="tab-cleanup-left">
       <div class="tab-cleanup-icon">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
@@ -90,10 +91,10 @@
         </svg>
       </div>
       <div class="tab-cleanup-text">
-        <strong id="domainSprwawCount"></strong><span id="domainSprwawText"> domains open — tabs spread across too many sites</span>
+        <strong id="domainSprawlCount"></strong><span id="domainSprawlText"> domains open — tabs spread across too many sites</span>
       </div>
     </div>
-    <button class="tab-cleanup-btn" data-action="dismiss-domain-sprwaw" id="domainSprwawDismissBtn">Got it</button>
+    <button class="tab-cleanup-btn" data-action="dismiss-domain-sprawl" id="domainSprawlDismissBtn">Got it</button>
   </div>
 
   <!-- ================================================================
@@ -118,10 +119,10 @@
   <div id="heatmapContainer"></div>
 
   <!-- ================================================================
-       TAB OUT DUPES BANNER — appears when you have extra Tab Out tabs open
-       Hidden by default; app.js shows it when dupeTabOutCount > 1
+       TEMPUS DUPES BANNER — appears when you have extra Tab Out Tempus tabs open
+       Hidden by default; app.js shows it when dupeTempusCount > 1
        ================================================================ -->
-  <div class="tab-cleanup-banner" id="tabOutDupeBanner" style="display:none">
+  <div class="tab-cleanup-banner" id="tempusDupeBanner" style="display:none">
     <div class="tab-cleanup-left">
       <div class="tab-cleanup-icon">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
@@ -129,10 +130,10 @@
         </svg>
       </div>
       <div class="tab-cleanup-text">
-        <strong id="tabOutDupeCount"></strong><span id="tabOutDupeText"> Tab Out tabs open — keep just this one?</span>
+        <strong id="tempusDupeCount"></strong><span id="tempusDupeText"> Tab Out Tempus tabs open — keep just this one?</span>
       </div>
     </div>
-    <button class="tab-cleanup-btn" data-action="close-tabout-dupes" id="tabOutDupeDismissBtn">Close extras</button>
+    <button class="tab-cleanup-btn" data-action="close-tempus-dupes" id="tempusDupeDismissBtn">Close extras</button>
   </div>
 
   <!-- ================================================================
@@ -196,7 +197,7 @@
       </div>
     </div>
     <div class="last-refresh">
-      <span style="color: var(--muted); font-size: 11px;"><a href="https://github.com/zarazhangrui/tab-out" target="_top" style="color: var(--muted); text-decoration: underline; text-underline-offset: 2px;">Tab Out</a> by <a href="https://x.com/zarazhangrui" target="_top" style="color: var(--muted); text-decoration: underline; text-underline-offset: 2px;">Zara</a></span>
+      <span style="color: var(--muted); font-size: 11px;"><a href="https://github.com/zarazhangrui/tab-out" target="_top" style="color: var(--muted); text-decoration: underline; text-underline-offset: 2px;">Tab Out Tempus</a> by <a href="https://x.com/zarazhangrui" target="_top" style="color: var(--muted); text-decoration: underline; text-underline-offset: 2px;">Zara</a> &amp; <a href="https://github.com/dengduck" target="_top" style="color: var(--muted); text-decoration: underline; text-underline-offset: 2px;">dengduck</a></span>
     </div>
   </footer>
 

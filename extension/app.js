@@ -1,5 +1,5 @@
 /* ================================================================
-   Tab Out — Dashboard App (Pure Extension Edition)
+   Tab Out Tempus — Dashboard App (Pure Extension Edition)
 
    This file is the brain of the dashboard. Now that the dashboard
    IS the extension page (not inside an iframe), it can call
@@ -61,7 +61,7 @@ const I18N = {
       // Banners
       '域名分散提示': ' domains open — tabs spread across too many sites',
       '知道了': 'Got it',
-      'Tab Out 重复提示': 'Tab Out tabs open',
+      'Tab Out Tempus 重复提示': 'Tab Out Tempus tabs open',
       'Keep just this one?': 'Keep just this one?',
       'Close extras': 'Close extras',
 
@@ -136,7 +136,7 @@ const I18N = {
       // Banners
       ' domains open — tabs spread across too many sites': ' 个域名同时打开，标签页过于分散',
       'Got it': '知道了',
-      'Tab Out tabs open': 'Tab Out 标签页打开',
+      'Tab Out Tempus tabs open': 'Tab Out Tempus 标签页打开',
       'Keep just this one?': '只保留这个？',
       'Close extras': '关闭其他',
 
@@ -226,6 +226,16 @@ const I18N = {
    access to chrome.tabs and chrome.storage. No middleman needed.
    ---------------------------------------------------------------- */
 
+/**
+ * Escape HTML special characters to prevent XSS when injecting into innerHTML.
+ * @param {string} str
+ * @returns {string}
+ */
+function escapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 // All open tabs — populated by fetchOpenTabs()
 let openTabs = [];
 
@@ -308,20 +318,22 @@ async function getTodayHistoricalTotal() {
  */
 function formatDuration(ms) {
   if (ms < 0) ms = 0;
+  const isZh = I18N.currentLang === 'zh';
   const seconds = Math.floor(ms / 1000);
-  if (seconds < 5) return '刚刚';
+  if (seconds < 5) return isZh ? '刚刚' : 'Just now';
   const minutes = Math.floor(ms / 60000);
-  if (minutes < 60) return `${minutes}分钟`;
+  if (minutes < 60) return isZh ? `${minutes}分钟` : `${minutes}m`;
   const hours = minutes / 60;
   if (hours < 24) {
-    return hours.toFixed(1).replace(/\.0$/, '') + '小时';
+    const h = hours.toFixed(1).replace(/\.0$/, '');
+    return isZh ? h + '小时' : h + 'h';
   }
   const days = Math.floor(hours / 24);
   const remainingHours = Math.floor(hours % 24);
   if (remainingHours === 0) {
-    return `${days}天`;
+    return isZh ? `${days}天` : `${days}d`;
   }
-  return `${days}天${remainingHours}小时`;
+  return isZh ? `${days}天${remainingHours}小时` : `${days}d ${remainingHours}h`;
 }
 
 /**
@@ -374,7 +386,7 @@ async function refreshTimerDisplay() {
  * fetchOpenTabs()
  *
  * Reads all currently open browser tabs directly from Chrome.
- * Sets the extensionId flag so we can identify Tab Out's own pages.
+ * Sets the extensionId flag so we can identify Tab Out Tempus's own pages.
  */
 async function fetchOpenTabs() {
   try {
@@ -390,8 +402,8 @@ async function fetchOpenTabs() {
       windowId: t.windowId,
       active:   t.active,
       discarded: t.discarded || false,
-      // Flag Tab Out's own pages so we can detect duplicate new tabs
-      isTabOut: t.url === newtabUrl || t.url === 'chrome://newtab/',
+      // Flag Tab Out Tempus's own pages so we can detect duplicate new tabs
+      isTempus: t.url === newtabUrl || t.url === 'chrome://newtab/',
     }));
   } catch {
     // chrome.tabs API unavailable (shouldn't happen in an extension page)
@@ -515,29 +527,29 @@ async function closeDuplicateTabs(urls, keepOne = true) {
 }
 
 /**
- * closeTabOutDupes()
+ * closeTempusDupes()
  *
- * Closes all duplicate Tab Out new-tab pages except the current one.
+ * Closes all duplicate Tab Out Tempus new-tab pages except the current one.
  */
-async function closeTabOutDupes() {
+async function closeTempusDupes() {
   const extensionId = chrome.runtime.id;
   const newtabUrl = `chrome-extension://${extensionId}/index.html`;
 
   const allTabs = await chrome.tabs.query({});
   const currentWindow = await chrome.windows.getCurrent();
-  const tabOutTabs = allTabs.filter(t =>
+  const tempusTabs = allTabs.filter(t =>
     t.url === newtabUrl || t.url === 'chrome://newtab/'
   );
 
-  if (tabOutTabs.length <= 1) return;
+  if (tempusTabs.length <= 1) return;
 
-  // Keep the active Tab Out tab in the CURRENT window — that's the one the
+  // Keep the active Tab Out Tempus tab in the CURRENT window — that's the one the
   // user is looking at right now. Falls back to any active one, then the first.
   const keep =
-    tabOutTabs.find(t => t.active && t.windowId === currentWindow.id) ||
-    tabOutTabs.find(t => t.active) ||
-    tabOutTabs[0];
-  const toClose = tabOutTabs.filter(t => t.id !== keep.id).map(t => t.id);
+    tempusTabs.find(t => t.active && t.windowId === currentWindow.id) ||
+    tempusTabs.find(t => t.active) ||
+    tempusTabs[0];
+  const toClose = tempusTabs.filter(t => t.id !== keep.id).map(t => t.id);
   if (toClose.length > 0) await chrome.tabs.remove(toClose);
   await fetchOpenTabs();
 }
@@ -807,12 +819,12 @@ async function openSettingsPanel() {
   } else {
     empty.style.display = 'none';
     list.innerHTML = blocked.map(hostname => {
-      const safe = hostname.replace(/"/g, '&quot;');
+      const safe = escapeHtml(hostname);
       return `
       <div class="blocked-item">
         <div class="blocked-info">
-          <span class="blocked-name">${friendlyDomain(hostname)}</span>
-          <span class="blocked-hostname">${hostname}</span>
+          <span class="blocked-name">${escapeHtml(friendlyDomain(hostname))}</span>
+          <span class="blocked-hostname">${safe}</span>
         </div>
         <button class="blocked-remove-btn" data-action="remove-blocked" data-hostname="${safe}" title="移出隐私名单，恢复统计">
           移除
@@ -850,7 +862,7 @@ async function exportAllHistory() {
   const a = document.createElement('a');
   const date = new Date().toISOString().split('T')[0];
   a.href = url;
-  a.download = `tabout-history-${date}.json`;
+  a.download = `tempus-history-${date}.json`;
   a.click();
   URL.revokeObjectURL(url);
   showToast(`已导出 ${historyKeys.length} 条历史记录`);
@@ -865,14 +877,42 @@ async function importHistory(file) {
     const text = await file.text();
     const data = JSON.parse(text);
 
+    if (typeof data !== 'object' || data === null || Array.isArray(data)) {
+      showToast('导入失败：文件格式错误');
+      return;
+    }
+
     const entries = Object.entries(data);
     if (entries.length === 0) {
       showToast('导入文件为空');
       return;
     }
 
-    await chrome.storage.local.set(data);
-    showToast(`已导入 ${entries.length} 条历史记录，请刷新页面`);
+    // Validate: only allow known key patterns (dailyHistory.*, hourlyData.*, blockedDomains)
+    const allowedPrefixes = ['dailyHistory.', 'hourlyData.', 'blockedDomains'];
+    const safeData = {};
+    let skipped = 0;
+    for (const [key, val] of entries) {
+      if (allowedPrefixes.some(p => key === p || key.startsWith(p))) {
+        // Validate value types: dailyHistory values should be numbers, hourlyData should be objects
+        if (key.startsWith('dailyHistory.') && typeof val !== 'number') { skipped++; continue; }
+        if (key.startsWith('hourlyData.') && (typeof val !== 'object' || val === null)) { skipped++; continue; }
+        safeData[key] = val;
+      } else {
+        skipped++;
+      }
+    }
+
+    if (Object.keys(safeData).length === 0) {
+      showToast('导入失败：没有有效的历史记录数据');
+      return;
+    }
+
+    await chrome.storage.local.set(safeData);
+    const msg = skipped > 0
+      ? `已导入 ${Object.keys(safeData).length} 条记录（跳过 ${skipped} 条无效数据），请刷新页面`
+      : `已导入 ${Object.keys(safeData).length} 条历史记录，请刷新页面`;
+    showToast(msg);
   } catch (e) {
     showToast('导入失败：文件格式错误');
   }
@@ -941,6 +981,13 @@ function timeAgo(dateStr) {
  */
 function getGreeting() {
   const hour = new Date().getHours();
+  if (I18N.currentLang === 'zh') {
+    if (hour < 6)  return '夜深了';
+    if (hour < 12) return '早上好';
+    if (hour < 14) return '中午好';
+    if (hour < 17) return '下午好';
+    return '晚上好';
+  }
   if (hour < 12) return 'Good morning';
   if (hour < 17) return 'Good afternoon';
   return 'Good evening';
@@ -950,7 +997,8 @@ function getGreeting() {
  * getDateDisplay() — "Friday, April 4, 2026"
  */
 function getDateDisplay() {
-  return new Date().toLocaleDateString('en-US', {
+  const locale = I18N.currentLang === 'zh' ? 'zh-CN' : 'en-US';
+  return new Date().toLocaleDateString(locale, {
     weekday: 'long',
     year:    'numeric',
     month:   'long',
@@ -1178,26 +1226,26 @@ function getRealTabs() {
 }
 
 /**
- * checkTabOutDupes()
+ * checkTempusDupes()
  *
- * Counts how many Tab Out pages are open. If more than 1,
+ * Counts how many Tab Out Tempus pages are open. If more than 1,
  * shows a banner offering to close the extras.
  */
-function checkTabOutDupes() {
-  const tabOutTabs = openTabs.filter(t => t.isTabOut);
-  const banner  = document.getElementById('tabOutDupeBanner');
-  const countEl = document.getElementById('tabOutDupeCount');
-  const textEl = document.getElementById('tabOutDupeText');
-  const btnEl = document.getElementById('tabOutDupeDismissBtn');
+function checkTempusDupes() {
+  const tempusTabs = openTabs.filter(t => t.isTempus);
+  const banner  = document.getElementById('tempusDupeBanner');
+  const countEl = document.getElementById('tempusDupeCount');
+  const textEl = document.getElementById('tempusDupeText');
+  const btnEl = document.getElementById('tempusDupeDismissBtn');
   if (!banner) return;
 
-  if (tabOutTabs.length > 1) {
-    if (countEl) countEl.textContent = tabOutTabs.length;
+  if (tempusTabs.length > 1) {
+    if (countEl) countEl.textContent = tempusTabs.length;
     // Update text based on current language
     if (textEl) {
       textEl.textContent = I18N.currentLang === 'zh'
-        ? ' 个 Tab Out 标签页打开 — 只保留这个？'
-        : ' Tab Out tabs open — keep just this one?';
+        ? ' 个 Tab Out Tempus 标签页打开 — 只保留这个？'
+        : ' Tab Out Tempus tabs open — keep just this one?';
     }
     if (btnEl) {
       btnEl.textContent = I18N.currentLang === 'zh' ? '关闭其他' : 'Close extras';
@@ -1209,18 +1257,18 @@ function checkTabOutDupes() {
 }
 
 /**
- * checkDomainSprwaw()
+ * checkDomainSprawl()
  *
  * Checks how many distinct hostnames are currently open.
- * If more than DOMAIN_SPRWAD_THRESHOLD (default 8), shows a warning banner
+ * If more than DOMAIN_SPRAWL_THRESHOLD (default 8), shows a warning banner
  * suggesting the user consolidate their tabs.
  */
-function checkDomainSprwaw() {
-  const SPRWAD_THRESHOLD = 8;
-  const banner  = document.getElementById('domainSprwawBanner');
-  const countEl = document.getElementById('domainSprwawCount');
-  const textEl = document.getElementById('domainSprwawText');
-  const btnEl = document.getElementById('domainSprwawDismissBtn');
+function checkDomainSprawl() {
+  const SPRAWL_THRESHOLD = 8;
+  const banner  = document.getElementById('domainSprawlBanner');
+  const countEl = document.getElementById('domainSprawlCount');
+  const textEl = document.getElementById('domainSprawlText');
+  const btnEl = document.getElementById('domainSprawlDismissBtn');
   if (!banner) return;
 
   const domains = new Set();
@@ -1232,7 +1280,7 @@ function checkDomainSprwaw() {
     } catch {}
   }
 
-  if (domains.size > SPRWAD_THRESHOLD) {
+  if (domains.size > SPRAWL_THRESHOLD) {
     if (countEl) countEl.textContent = domains.size;
     // Update text based on current language
     if (textEl) {
@@ -1270,7 +1318,7 @@ async function renderHeatmap() {
     const resp = await chrome.runtime.sendMessage({ type: 'GET_HOURLY_DATA', date: today });
     hourlyData = (resp && resp.hourlyData) ? resp.hourlyData : {};
   } catch (e) {
-    console.warn('[tab-out] Failed to get hourly data:', e);
+    console.warn('[tempus] Failed to get hourly data:', e);
     container.innerHTML = '';
     return;
   }
@@ -1283,9 +1331,6 @@ async function renderHeatmap() {
     const sumB = (hourlyData[b] || []).reduce((s, v) => s + v, 0);
     return sumB - sumA;
   });
-  
-  // DEBUG: log how many hostnames we got
-  console.log('[DEBUG renderHeatmap] hostnames count:', hostnames.length, ', top 8:', hostnames.slice(0, 8));
   
   // HARD CAP: ensure we never render more than 8 domains in the heatmap
   const topHosts = hostnames.slice(0, Math.min(8, hostnames.length));
@@ -1312,15 +1357,15 @@ async function renderHeatmap() {
       const intensity = maxVal > 0 ? val / maxVal : 0;
       const alpha = intensity < 0.01 ? 0 : 0.1 + intensity * 0.7;
       const color = `rgba(90, 122, 98, ${alpha.toFixed(2)})`;
-      return `<div class="heatmap-cell" style="background:${color}" title="${hostname} · ${String(h).padStart(2,'0')}:00 — ${fmt(val)}"></div>`;
+      return `<div class="heatmap-cell" style="background:${color}" title="${escapeHtml(hostname)} · ${String(h).padStart(2,'0')}:00 — ${fmt(val)}"></div>`;
     }).join('');
-    return `<div class="heatmap-hostname" title="${hostname}">${friendlyDomain(hostname)}</div>${cells}`;
+    return `<div class="heatmap-hostname" title="${escapeHtml(hostname)}">${escapeHtml(friendlyDomain(hostname))}</div>${cells}`;
   }).join('');
 
   container.innerHTML = `
     <div class="heatmap-title">
       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" width="13" height="13"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3v11.25A2.25 2.25 0 0 0 6 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0 1 4.5 16.5h15.75a2.25 2.25 0 0 1 2.25 2.25V3" /></svg>
-      今日热力图
+      ${I18N.currentLang === 'zh' ? '今日热力图' : 'Today\'s Heatmap'}
     </div>
     <div class="heatmap-grid">
       <div class="heatmap-header">${hourLabels}</div>
@@ -1417,7 +1462,7 @@ async function syncPrivateMode() {
       updatePrivateModeCountdown();
       startPrivateModeCountdown();
     } else {
-      label.textContent = '隐私';
+      label.textContent = I18N.t('Private');
     }
   }
 }
@@ -1440,10 +1485,10 @@ function updatePrivateModeCountdown() {
     const label = document.getElementById('privateModeLabel');
     if (btn) {
       btn.classList.remove('active');
-      btn.title = '开启隐私模式，暂停计时 1 小时';
+      btn.title = I18N.currentLang === 'zh' ? '开启隐私模式，暂停计时 1 小时' : 'Enable private mode, pause tracking for 1 hour';
     }
-    if (label) label.textContent = '隐私';
-    showToast('隐私模式已自动关闭');
+    if (label) label.textContent = I18N.t('Private');
+    showToast(I18N.currentLang === 'zh' ? '隐私模式已自动关闭' : 'Private mode auto-disabled');
     return;
   }
 
@@ -1465,13 +1510,15 @@ function updatePrivateModeCountdown() {
  * @returns {string}
  */
 function formatMinutes(minutes) {
-  if (minutes === 'midnight') return '到午夜';
+  const isZh = I18N.currentLang === 'zh';
+  if (minutes === 'midnight') return isZh ? '到午夜' : 'until midnight';
   const m = parseInt(minutes, 10);
   if (m >= 60) {
     const h = m / 60;
-    return h === 1 ? '1 小时' : `${h} 小时`;
+    if (isZh) return h === 1 ? '1 小时' : `${h} 小时`;
+    return h === 1 ? '1 hour' : `${h} hours`;
   }
-  return `${m} 分钟`;
+  return isZh ? `${m} 分钟` : `${m} minutes`;
 }
 
 /**
@@ -1483,12 +1530,11 @@ function updatePrivateModeTooltip() {
   if (!btn) return;
 
   if (privateModeActive) {
-    // Active: show exit tooltip
-    btn.title = '退出隐私模式';
+    btn.title = I18N.currentLang === 'zh' ? '退出隐私模式' : 'Exit private mode';
   } else {
-    // Inactive: show enable tooltip with selected duration
     const minutes = select ? select.value : '60';
-    btn.title = `开启隐私模式，暂停计时 ${formatMinutes(minutes)}`;
+    const prefix = I18N.currentLang === 'zh' ? '开启隐私模式，暂停计时' : 'Enable private mode, pause for';
+    btn.title = `${prefix} ${formatMinutes(minutes)}`;
   }
 }
 
@@ -1508,8 +1554,8 @@ async function togglePrivateMode() {
     // Immediately sync state to show countdown without page refresh
     await syncPrivateMode();
     showToast(minutesVal === 'midnight'
-      ? '隐私模式开启，到午夜自动关闭'
-      : `隐私模式开启，暂停计时 ${formatMinutes(minutesVal)}`);
+      ? (I18N.currentLang === 'zh' ? '隐私模式开启，到午夜自动关闭' : 'Private mode on until midnight')
+      : (I18N.currentLang === 'zh' ? `隐私模式开启，暂停计时 ${formatMinutes(minutesVal)}` : `Private mode on, pausing for ${formatMinutes(minutesVal)}`));
   } else {
     // Disabling early
     await chrome.runtime.sendMessage({ type: 'SET_PRIVATE_MODE', minutes: null });
@@ -1520,10 +1566,10 @@ async function togglePrivateMode() {
     const label = document.getElementById('privateModeLabel');
     if (btn) {
       btn.classList.remove('active');
-      btn.title = '开启隐私模式，暂停计时 1 小时';
+      btn.title = I18N.currentLang === 'zh' ? '开启隐私模式，暂停计时 1 小时' : 'Enable private mode, pause tracking for 1 hour';
     }
-    if (label) label.textContent = '隐私';
-    showToast('隐私模式已关闭');
+    if (label) label.textContent = I18N.t('Private');
+    showToast(I18N.currentLang === 'zh' ? '隐私模式已关闭' : 'Private mode disabled');
   }
 }
 
@@ -1612,8 +1658,8 @@ function renderDomainCard(group, hostnameStaleness = {}) {
     const daysSince = Math.floor((Date.now() - hostnameStaleness[groupHostname]) / 86400000);
     if (daysSince >= 7) {
       const daysLabel = daysSince >= 30
-        ? `${Math.floor(daysSince / 30)} 个月未读`
-        : `${daysSince} 天未读`;
+        ? `${Math.floor(daysSince / 30)} ${I18N.t('months stale')}`
+        : `${daysSince} ${I18N.t('days stale')}`;
       staleBadge = `<span class="open-tabs-badge" style="color:var(--accent-amber);background:rgba(200,113,58,0.08);">
         🕐 ${daysLabel}
       </span>`;
@@ -1641,8 +1687,8 @@ function renderDomainCard(group, hostnameStaleness = {}) {
     const dupeTag  = count > 1 ? ` <span class="chip-dupe-badge">(${count}x)</span>` : '';
     const isDormant = tab.discarded;
     const chipClass = (count > 1 ? ' chip-has-dupes' : '') + (isDormant ? ' chip-dormant' : '');
-    const safeUrl   = (tab.url || '').replace(/"/g, '&quot;');
-    const safeTitle = label.replace(/"/g, '&quot;');
+    const safeUrl   = escapeHtml(tab.url || '');
+    const safeTitle = escapeHtml(label);
     let domain = '';
     try { domain = new URL(tab.url).hostname; } catch {}
     const faviconUrl = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=16` : '';
@@ -1659,7 +1705,7 @@ function renderDomainCard(group, hostnameStaleness = {}) {
          </button>`;
     return `<div class="page-chip clickable${chipClass}" data-action="${isDormant ? 'wake-tab' : 'focus-tab'}" data-tab-url="${safeUrl}" data-tab-id="${tab.id}" title="${safeTitle}${isDormant ? ' (休眠)' : ''}">
       ${faviconUrl ? `<img class="chip-favicon" src="${faviconUrl}" alt="" onerror="this.style.display='none'">` : ''}
-      <span class="chip-text">${label}</span>${dupeTag}${zzzBadge}
+      <span class="chip-text">${escapeHtml(label)}</span>${dupeTag}${zzzBadge}
       <div class="chip-actions">${actions}</div>
     </div>`;
   }).join('') + (extraCount > 0 ? buildOverflowChips(uniqueTabs.slice(8), urlCounts) : '');
@@ -1683,9 +1729,12 @@ function renderDomainCard(group, hostnameStaleness = {}) {
   if (groupHostname2 && hostnameStaleness[groupHostname2]) {
     const daysSince = Math.floor((Date.now() - hostnameStaleness[groupHostname2]) / 86400000);
     if (daysSince >= 7) {
+      const staleLabel = daysSince >= 30
+        ? `${Math.floor(daysSince/30)} ${I18N.t('months stale')}`
+        : `${daysSince} ${I18N.t('days stale')}`;
       actionsHtml += `
         <button class="action-btn" data-action="close-stale-domain" data-hostname="${groupHostname2}">
-          清理 ${daysSince >= 30 ? Math.floor(daysSince/30) + '个月' : daysSince + '天'}未读
+          ${I18N.t('Clear')} ${staleLabel}
         </button>`;
     }
   }
@@ -1693,9 +1742,10 @@ function renderDomainCard(group, hostnameStaleness = {}) {
   // Add a "sleep" action button if domain has non-dormant tabs
   const nonDormantCount = (group.tabs || []).filter(t => !t.discarded).length;
   if (groupHostname2 && nonDormantCount > 0) {
+    const sleepTitle = I18N.currentLang === 'zh' ? '休眠这些标签，节省内存' : 'Put these tabs to sleep to save memory';
     actionsHtml += `
-      <button class="action-btn" data-action="sleep-domain" data-hostname="${groupHostname2}" title="休眠这些标签，节省内存">
-        💤 休眠
+      <button class="action-btn" data-action="sleep-domain" data-hostname="${groupHostname2}" title="${sleepTitle}">
+        💤 ${I18N.t('Sleep')}
       </button>`;
   }
 
@@ -1777,7 +1827,7 @@ async function renderDeferredColumn() {
     }
 
   } catch (err) {
-    console.warn('[tab-out] Could not load saved tabs:', err);
+    console.warn('[tempus] Could not load saved tabs:', err);
     column.style.display = 'none';
   }
 }
@@ -1795,18 +1845,18 @@ function renderDeferredItem(item) {
   const ago = timeAgo(item.savedAt);
 
   return `
-    <div class="deferred-item" data-deferred-id="${item.id}">
-      <input type="checkbox" class="deferred-checkbox" data-action="check-deferred" data-deferred-id="${item.id}">
+    <div class="deferred-item" data-deferred-id="${escapeHtml(item.id)}">
+      <input type="checkbox" class="deferred-checkbox" data-action="check-deferred" data-deferred-id="${escapeHtml(item.id)}">
       <div class="deferred-info">
-        <a href="${item.url}" target="_blank" rel="noopener" class="deferred-title" title="${(item.title || '').replace(/"/g, '&quot;')}">
-          <img src="${faviconUrl}" alt="" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px" onerror="this.style.display='none'">${item.title || item.url}
+        <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener" class="deferred-title" title="${escapeHtml(item.title || '')}">
+          <img src="${faviconUrl}" alt="" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px" onerror="this.style.display='none'">${escapeHtml(item.title || item.url)}
         </a>
         <div class="deferred-meta">
-          <span>${domain}</span>
+          <span>${escapeHtml(domain)}</span>
           <span>${ago}</span>
         </div>
       </div>
-      <button class="deferred-dismiss" data-action="dismiss-deferred" data-deferred-id="${item.id}" title="Dismiss">
+      <button class="deferred-dismiss" data-action="dismiss-deferred" data-deferred-id="${escapeHtml(item.id)}" title="Dismiss">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
       </button>
     </div>`;
@@ -1821,8 +1871,8 @@ function renderArchiveItem(item) {
   const ago = item.completedAt ? timeAgo(item.completedAt) : timeAgo(item.savedAt);
   return `
     <div class="archive-item">
-      <a href="${item.url}" target="_blank" rel="noopener" class="archive-item-title" title="${(item.title || '').replace(/"/g, '&quot;')}">
-        ${item.title || item.url}
+      <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener" class="archive-item-title" title="${escapeHtml(item.title || '')}">
+        ${escapeHtml(item.title || item.url)}
       </a>
       <span class="archive-item-date">${ago}</span>
     </div>`;
@@ -1973,7 +2023,7 @@ async function renderStaticDashboard() {
     const resp = await chrome.runtime.sendMessage({ type: 'GET_STALENESS' });
     hostnameStaleness = (resp && resp.hostnameLastFocus) ? resp.hostnameLastFocus : {};
   } catch (e) {
-    console.warn('[tab-out] Failed to get staleness data:', e);
+    console.warn('[tempus] Failed to get staleness data:', e);
   }
 
   // --- Render domain cards ---
@@ -1982,7 +2032,6 @@ async function renderStaticDashboard() {
   const openTabsSectionCount = document.getElementById('openTabsSectionCount');
   const openTabsSectionTitle = document.getElementById('openTabsSectionTitle');
 
-  console.log('[DEBUG] renderStaticDashboard: domainGroups.length =', domainGroups.length, ', realTabs.length =', realTabs.length);
 
   if (domainGroups.length > 0 && openTabsSection) {
     if (openTabsSectionTitle) openTabsSectionTitle.textContent = 'Open tabs';
@@ -1993,21 +2042,19 @@ async function renderStaticDashboard() {
       openTabsMissionsEl.innerHTML = domainGroups.map(g => renderDomainCard(g, hostnameStaleness)).join('');
     }
     openTabsSection.style.display = 'block';
-    console.log('[DEBUG] openTabsSection display set to block');
   } else if (openTabsSection) {
     openTabsSection.style.display = 'none';
-    console.log('[DEBUG] openTabsSection display set to none (domainGroups empty)');
   }
 
   // --- Footer stats ---
   const statTabs = document.getElementById('statTabs');
   if (statTabs) statTabs.textContent = openTabs.length;
 
-  // --- Check for duplicate Tab Out tabs ---
-  checkTabOutDupes();
+  // --- Check for duplicate Tab Out Tempus tabs ---
+  checkTempusDupes();
 
   // --- Check for domain sprawl (too many distinct domains) ---
-  checkDomainSprwaw();
+  checkDomainSprawl();
 
   // --- Sync private mode state ---
   await syncPrivateMode();
@@ -2049,7 +2096,6 @@ document.addEventListener('click', async (e) => {
       // Show heatmap when switching to Today view
       const heatmapContainer = document.getElementById('heatmapContainer');
       if (heatmapContainer) heatmapContainer.style.display = 'block';
-      console.log('[DEBUG] Switched to today, showing heatmap');
       await renderStaticDashboard();
       await renderProductivityBanner('today');
       renderHeatmap(); // intentionally not awaited
@@ -2057,9 +2103,7 @@ document.addEventListener('click', async (e) => {
       // Hide heatmap during stats view (week/month/year), but keep openTabsSection visible
       const heatmapContainer = document.getElementById('heatmapContainer');
       if (heatmapContainer) heatmapContainer.style.display = 'none';
-      console.log('[DEBUG] Switched to', view, ', hiding heatmap only');
       const stats = await getStatsData(view);
-      console.log('[DEBUG] getStatsData(' + view + ') returned:', stats ? stats.length + ' items' : 'null/undefined');
       renderStatsView(stats, view);
       renderProductivityBanner(view); // intentionally not awaited — runs independently
     }
@@ -2072,23 +2116,23 @@ document.addEventListener('click', async (e) => {
 
   const action = actionEl.dataset.action;
 
-  // ---- Close duplicate Tab Out tabs ----
-  if (action === 'close-tabout-dupes') {
-    await closeTabOutDupes();
+  // ---- Close duplicate Tab Out Tempus tabs ----
+  if (action === 'close-tempus-dupes') {
+    await closeTempusDupes();
     playCloseSound();
-    const banner = document.getElementById('tabOutDupeBanner');
+    const banner = document.getElementById('tempusDupeBanner');
     if (banner) {
       banner.style.transition = 'opacity 0.4s';
       banner.style.opacity = '0';
       setTimeout(() => { banner.style.display = 'none'; banner.style.opacity = '1'; }, 400);
     }
-    showToast('Closed extra Tab Out tabs');
+    showToast('Closed extra Tab Out Tempus tabs');
     return;
   }
 
   // ---- Dismiss domain sprawl warning banner ----
-  if (action === 'dismiss-domain-sprwaw') {
-    const banner = document.getElementById('domainSprwawBanner');
+  if (action === 'dismiss-domain-sprawl') {
+    const banner = document.getElementById('domainSprawlBanner');
     if (banner) {
       banner.style.transition = 'opacity 0.4s';
       banner.style.opacity = '0';
@@ -2232,7 +2276,7 @@ document.addEventListener('click', async (e) => {
     try {
       await saveTabForLater({ url: tabUrl, title: tabTitle });
     } catch (err) {
-      console.error('[tab-out] Failed to save tab:', err);
+      console.error('[tempus] Failed to save tab:', err);
       showToast('Failed to save tab');
       return;
     }
@@ -2570,7 +2614,7 @@ document.addEventListener('input', async (e) => {
     archiveList.innerHTML = results.map(item => renderArchiveItem(item)).join('')
       || '<div style="font-size:12px;color:var(--muted);padding:8px 0">No results</div>';
   } catch (err) {
-    console.warn('[tab-out] Archive search failed:', err);
+    console.warn('[tempus] Archive search failed:', err);
   }
 });
 
@@ -2680,10 +2724,13 @@ async function clearDomainHistory(hostname) {
     const h = rest.slice(dot2 + 1);
     return h === hostname;
   });
+  // Also remove hourly heatmap data for this hostname
+  const hourlyKey = `hourlyData.${hostname}`;
+  if (allKeys.includes(hourlyKey)) {
+    toDelete.push(hourlyKey);
+  }
   if (toDelete.length > 0) {
-    const removes = {};
-    toDelete.forEach(k => removes[k] = null);
-    await chrome.storage.local.set(removes);
+    await chrome.storage.local.remove(toDelete);
   }
 }
 
@@ -2758,17 +2805,17 @@ function renderStatsView(stats, range) {
 
   if (container) {
     container.innerHTML = stats.map(item => {
-      const safeHostname = item.hostname.replace(/"/g, '&quot;');
+      const safeHostname = escapeHtml(item.hostname);
       return `
       <div class="mission-card domain-card has-neutral-bar" data-stats-hostname="${safeHostname}">
         <div class="status-bar"></div>
         <div class="mission-content">
           <div class="mission-top">
-            <span class="mission-name">${item.friendlyName}</span>
+            <span class="mission-name">${escapeHtml(item.friendlyName)}</span>
             <span class="group-time-badge" style="font-size:11px;padding:3px 8px;">${formatDuration(item.totalMs)}</span>
           </div>
           <div class="mission-pages" style="padding:4px 0 8px;font-size:12px;color:var(--muted);">
-            ${item.hostname}
+            ${safeHostname}
           </div>
           <div class="stats-domain-actions">
             <button class="stats-action-btn" data-action="hide-domain" data-hostname="${safeHostname}" title="暂时从统计视图移除，不清空时长">
@@ -2818,10 +2865,8 @@ if (langToggleBtn) {
     const newLang = I18N.toggle();
     updateLangFlag();
     updateUIText();
-    console.log('[DEBUG] Language toggled to', newLang, ', currentView =', currentView);
     // Re-render the current view to update all text
     if (currentView === 'today') {
-      console.log('[DEBUG] Re-rendering today view after language toggle');
       await renderStaticDashboard();
       await renderProductivityBanner('today');
       renderHeatmap();
@@ -2907,8 +2952,8 @@ function updateUIText() {
   updatePrivateModeTooltip();
 
   // Update banners (they'll reset text when shown next time, but update current if visible)
-  checkTabOutDupes();
-  checkDomainSprwaw();
+  checkTempusDupes();
+  checkDomainSprawl();
 
   // Update deferred column
   const deferredTitle = document.querySelector('#deferredColumn .section-header h2');
@@ -2936,6 +2981,6 @@ function updateUIText() {
     // Apply language-specific UI text after initial render
     updateUIText();
   } catch (err) {
-    console.error('[tab-out] Initial render failed:', err);
+    console.error('[tempus] Initial render failed:', err);
   }
 })();

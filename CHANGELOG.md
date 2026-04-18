@@ -1,8 +1,32 @@
 # Changelog
 
-All notable changes to **Tab Out** (our fork with custom features) are documented here.
+All notable changes to **Tab Out Tempus** (our fork with custom features) are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+
+## [1.3.0] — 2026-04-19
+
+### Changed
+- **Project rename: Tab Out → Tab Out Tempus** — Full rebrand across all files:
+  - Extension name in `manifest.json` (name + default_title)
+  - HTML `<title>` and footer attribution in `index.html`
+  - All user-visible text (banners, toasts, i18n strings) in `app.js`
+  - All JS variable/function names (`isTabOut` → `isTempus`, `tabOutTabs` → `tempusTabs`, `closeTabOutDupes` → `closeTempusDupes`, `checkTabOutDupes` → `checkTempusDupes`, etc.)
+  - All HTML element IDs (`tabOutDupeBanner` → `tempusDupeBanner`, etc.)
+  - Console log prefix `[tab-out]` → `[tempus]`
+  - Export filename `tabout-history-*.json` → `tempus-history-*.json`
+  - All documentation (README, AGENTS, CHANGELOG, docs/)
+- Version bumped to 1.3.0.
+
+### Fixed
+- **Footer attribution** — Added `& dengduck` credit with GitHub link alongside Zara's attribution.
+- **Privacy mode i18n** — Fixed select options (`15 minutes`, `1 hour`, etc.), button labels, tooltips, and toasts all hard-coded in Chinese. Now fully i18n-aware, matching the active language (EN/ZH). Affected: `formatMinutes()`, `updatePrivateModeTooltip()`, and 3 toggle toast messages.
+- **Header layout** — Language toggle and Settings button now share the same row (new `.header-actions` flex container), instead of stacking vertically.
+
+### Removed
+- Leftover `[DEBUG renderHeatmap]` console log.
+
+---
 
 ## [1.2.0] — 2026-04-19
 
