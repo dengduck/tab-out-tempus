@@ -6,3 +6,9 @@ docs/superpowers/
 
 # Personal config (landing page patterns, etc.) — never push to GitHub
 extension/config.local.js
+
+# AI agent working memory — local only
+.workbuddy/
+
+# Build artifacts — use git tag snapshots instead
+extension.zip

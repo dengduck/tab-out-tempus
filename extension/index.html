@@ -114,11 +114,6 @@
   </div>
 
   <!-- ================================================================
-       TAB HEATMAP — 24-hour heatmap shown in Today view
-       ================================================================ -->
-  <div id="heatmapContainer"></div>
-
-  <!-- ================================================================
        TEMPUS DUPES BANNER — appears when you have extra Tab Out Tempus tabs open
        Hidden by default; app.js shows it when dupeTempusCount > 1
        ================================================================ -->
@@ -187,6 +182,12 @@
   </div><!-- end .dashboard-columns -->
 
   <!-- ================================================================
+       TAB HEATMAP — 24-hour heatmap shown in Today view
+       Positioned below the open-tabs section so the dashboard is the focus
+       ================================================================ -->
+  <div id="heatmapContainer"></div>
+
+  <!-- ================================================================
        FOOTER — global stats + refresh control
        ================================================================ -->
   <footer>
@@ -197,7 +198,7 @@
       </div>
     </div>
     <div class="last-refresh">
-      <span style="color: var(--muted); font-size: 11px;"><a href="https://github.com/zarazhangrui/tab-out" target="_top" style="color: var(--muted); text-decoration: underline; text-underline-offset: 2px;">Tab Out Tempus</a> by <a href="https://x.com/zarazhangrui" target="_top" style="color: var(--muted); text-decoration: underline; text-underline-offset: 2px;">Zara</a> &amp; <a href="https://github.com/dengduck" target="_top" style="color: var(--muted); text-decoration: underline; text-underline-offset: 2px;">dengduck</a></span>
+      <span style="color: var(--muted); font-size: 11px;"><a href="https://github.com/zarazhangrui/tab-out" target="_top" style="color: var(--muted); text-decoration: underline; text-underline-offset: 2px;">Tab Out Tempus</a> <span id="appVersion" style="opacity: 0.8;"></span> by <a href="https://x.com/zarazhangrui" target="_top" style="color: var(--muted); text-decoration: underline; text-underline-offset: 2px;">Zara</a> &amp; <a href="https://github.com/dengduck" target="_top" style="color: var(--muted); text-decoration: underline; text-underline-offset: 2px;">dengduck</a></span>
     </div>
   </footer>
 
@@ -209,7 +210,7 @@
 <div class="settings-overlay" id="settingsOverlay" style="display:none">
   <div class="settings-panel">
     <div class="settings-header">
-      <h2>设置</h2>
+      <h2 id="settingsTitle">设置</h2>
       <button class="settings-close-btn" id="closeSettingsBtn" data-action="close-settings">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -218,15 +219,15 @@
     </div>
     <div class="settings-body">
       <div class="settings-section">
-        <h3 class="settings-section-title">隐私名单</h3>
-        <p class="settings-section-desc">以下域名已屏蔽，不会参与任何统计。移除后恢复统计。</p>
+        <h3 class="settings-section-title" id="settingsBlockedTitle">隐私名单</h3>
+        <p class="settings-section-desc" id="settingsBlockedDesc">以下域名已屏蔽，不会参与任何统计。移除后恢复统计。</p>
         <div class="blocked-list" id="blockedList"></div>
-        <div class="blocked-empty" id="blockedEmpty" style="display:none">隐私名单为空</div>
+        <div class="blocked-empty" id="blockedEmpty" style="display:none" data-i18n="blockedEmpty">隐私名单为空</div>
       </div>
 
       <div class="settings-section">
-        <h3 class="settings-section-title">历史记录迁移</h3>
-        <p class="settings-section-desc">导出所有浏览时长记录到文件，重装插件后可导入恢复。</p>
+        <h3 class="settings-section-title" id="settingsMigrationTitle">历史记录迁移</h3>
+        <p class="settings-section-desc" id="settingsMigrationDesc">导出所有浏览时长记录到文件，重装插件后可导入恢复。</p>
         <div class="settings-row">
           <button class="action-btn" data-action="export-history" id="exportHistoryBtn">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" width="13" height="13"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" /></svg>

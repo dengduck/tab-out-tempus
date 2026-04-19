@@ -13,6 +13,96 @@
    5. Stores "Saved for Later" tabs in chrome.storage.local (no server)
    ================================================================ */
 
+/* ================================================================
+   📑 TABLE OF CONTENTS — Quick Navigation
+   ================================================================
+
+   §1  INTERNATIONALIZATION (i18n)              ~L113  — I18N object + translations
+        · I18N.t(), I18N.toggle(), I18N.load/save
+
+   §2  CHROME TABS — Direct API Access          ~L312
+        · escapeHtml()                           L324
+        · ─ Tab Timer State (timeLog model) ──   L332
+        · ─ timeLog Query Helpers ────────────   L375
+        · getSessionData(), getMonthKeys()
+        · readTimeLogRange(), aggregateTimeLog()
+        · getLocalTodayRange(), getTodayHistoricalTotal()
+        · formatDuration()                       L509
+        · refreshTimerDisplay()                  L539
+        · fetchOpenTabs()                        L591
+        · closeTabsByUrls(), closeTabsExact()    L622
+        · focusTab(), closeDuplicateTabs()
+        · closeTempusDupes()
+
+   §3  SAVED FOR LATER — chrome.storage.local    ~L758
+        · saveTabForLater()                      L785
+        · getSavedTabs(), checkOffSavedTab(), dismissSavedTab()
+
+   §4  UI HELPERS                                ~L844
+        · playCloseSound()                       L855
+        · shootConfetti()                        L904
+        · animateCardOut(), showToast()          L995
+        · openSettingsPanel()                    L1006
+        · exportAllHistory()                     L1044
+        · importHistory()                        L1083
+        · closeSettingsPanel()
+        · timeAgo(), getGreeting(), getDateDisplay()
+
+   §5  DOMAIN & TITLE CLEANUP                   ~L1256
+        · FRIENDLY_DOMAINS map
+        · friendlyDomain(), stripTitleNoise(), cleanTitle(), smartTitle()
+
+   §6  SVG ICONS                                ~L1434
+   §7  IN-MEMORY STORE (domainGroups)           ~L1445
+   §8  HELPER: getRealTabs() / filters          ~L1451
+        · checkTempusDupes()                     L1480
+        · checkDomainSprawl()                    L1512
+
+   §9  HEATMAP & PRODUCTIVITY BANNER            ~L1559
+        · renderHeatmap()                        L1559
+        · renderProductivityBanner()             L1646
+        · syncPrivateMode() + countdown          L1714
+
+   §10 OVERFLOW CHIPS                           ~L1845
+        · buildOverflowChips()                   L1849
+
+   §11 DOMAIN CARD RENDERER                     ~L1883
+        · renderDomainCard()                     L1894
+
+   §12 SAVED FOR LATER — Render Column          ~L2044
+        · renderDeferredColumn()                 L2055
+        · renderDeferredItem(), renderArchiveItem()
+
+   §13 MAIN DASHBOARD RENDERER                  ~L2151
+        · renderStaticDashboard()                L2166 ← main entry
+        · renderDashboard()
+
+   §14 EVENT HANDLERS (delegation)              ~L2343
+        · document click listener                 ← all button clicks
+        · archive toggle, import input, search
+
+   §15 HISTORY STATS — storage aggregation      ~L2891
+        · getLocalDateRangeMs()                  L2901
+        · getStatsData()                         L2934
+        · clearDomainHistory()                   L2960
+        · add/remove/getBlockedDomains()
+        · renderStatsView()                      L3033
+
+   §16 INITIALIZE                               ~L3102
+        · currentView, hiddenDomains, blockedDomains state   L3105
+        · startTimerInterval() / stopTimerInterval()         L3115
+        · visibilitychange listener
+        · language toggle button handler
+        · updateLangFlag()                       L3175
+        · updateUIText()                         L3186
+        · Async IIFE for initial render (end of file)
+
+   ================================================================
+   🔍 Tip: Line numbers are approximate. After large edits, they drift.
+   Search by function name (e.g., `function refreshTimerDisplay`) for
+   exact location.
+   ================================================================ */
+
 'use strict';
 
 
@@ -239,88 +329,230 @@ function escapeHtml(str) {
 // All open tabs — populated by fetchOpenTabs()
 let openTabs = [];
 
-// ─── Tab Timer State ───────────────────────────────────────────────────────────
-/** @type {Object.<string, {hostname: string, title: string, totalTime: number}>} */
-let tabSessionData = {};
+// ─── Tab Timer State (v1.3.1 — timeLog model) ─────────────────────────────────
+/** Active session info from background.js */
+let activeRunningMs = 0;
+let activeHostname = null;
+let activeTabId = null;
+/** Basic tab info (hostname/title) for all tracked tabs */
+let tabInfoMap = {};
 
 /** Private mode state — set after syncing with background.js */
 let privateModeActive = false;
 let privateModeEndTime = null;
 let privateModeInterval = null;
 
-/** Timestamp of last timer refresh */
-let lastTimerRefresh = Date.now();
+/** Cached today's total from timeLog (ms) — refreshed periodically */
+let todayTimeLogTotalMs = 0;
+let todayTimeLogByHostname = {};  // hostname → ms
+let todayTimeLogByTid = {};        // tabId → ms (v1.3.3, for per-tab badges)
+let lastTimeLogCacheTime = 0;
+const TIMELOG_CACHE_INTERVAL_MS = 10000; // refresh every 10s
 
-/** Cached today's historical total (ms) — refreshed periodically, not every second */
-let todayHistoricalTotalMs = 0;
-let lastHistoricalCacheTime = 0;
-const HISTORICAL_CACHE_INTERVAL_MS = 30000; // refresh historical cache every 30s
+// v1.3.5: Per-tab lifetime display now reads cumulativeMs directly from
+// GET_SESSION_DATA. No more timeLog-aggregation cache — cumulativeMs is
+// monotonic and the SW hands us the latest value on every tick.
+
+/** Timer refresh interval ID (for visibility control) */
+let timerIntervalId = null;
 
 /**
- * Query background.js for current session data (tab times).
- * @returns {Promise<Object>} tabSessions object
+ * Query background.js for current active session data.
+ * Returns only the active tab's running time (no totalTime accumulation).
  */
-async function getTabSessionData() {
+async function getSessionData() {
   try {
     const response = await chrome.runtime.sendMessage({ type: 'GET_SESSION_DATA' });
-    return response?.tabSessions || {};
+    activeRunningMs = response?.activeRunningMs || 0;
+    activeHostname = response?.activeHostname || null;
+    activeTabId = response?.activeTabId || null;
+    tabInfoMap = response?.tabInfo || {};
+    return response || {};
   } catch {
+    activeRunningMs = 0;
+    activeHostname = null;
+    activeTabId = null;
+    tabInfoMap = {};
     return {};
   }
 }
 
+// ─── timeLog Query Helpers ────────────────────────────────────────────────────
+
 /**
- * Get today's total browsing time from chrome.storage.local (dailyHistory).
- * Uses a cache to avoid reading storage every second.
- * @returns {Promise<number>} Total milliseconds for today
+ * Get the UTC month keys ("YYYY-MM") that a time range spans.
+ * @param {number} startMs - UTC timestamp (ms)
+ * @param {number} endMs - UTC timestamp (ms)
+ * @returns {string[]}
+ */
+function getMonthKeys(startMs, endMs) {
+  const startMonth = new Date(startMs).toISOString().slice(0, 7);
+  const endMonth = new Date(endMs).toISOString().slice(0, 7);
+  if (startMonth === endMonth) return [startMonth];
+
+  // Generate all months between start and end
+  const months = [];
+  const d = new Date(startMs);
+  d.setUTCDate(1);
+  while (d.getTime() <= endMs) {
+    months.push(d.toISOString().slice(0, 7));
+    d.setUTCMonth(d.getUTCMonth() + 1);
+  }
+  return months;
+}
+
+/**
+ * Read timeLog entries from storage for a given UTC time range.
+ * Returns all entries that overlap with [rangeStartMs, rangeEndMs).
+ * @param {number} rangeStartMs
+ * @param {number} rangeEndMs
+ * @returns {Promise<Array<{s: number, e: number, h: string}>>}
+ */
+async function readTimeLogRange(rangeStartMs, rangeEndMs) {
+  const monthKeys = getMonthKeys(rangeStartMs, rangeEndMs);
+  const storageKeys = monthKeys.map(m => `timeLog.${m}`);
+
+  const items = await new Promise(resolve => {
+    chrome.storage.local.get(storageKeys, resolve);
+  });
+
+  const result = [];
+  for (const sKey of storageKeys) {
+    const logs = items[sKey] || [];
+    for (const entry of logs) {
+      // Check if this entry overlaps with the range
+      if (entry.e > rangeStartMs && entry.s < rangeEndMs) {
+        result.push(entry);
+      }
+    }
+  }
+  return result;
+}
+
+/**
+ * Calculate total ms per hostname from timeLog entries within a time range.
+ * Uses interval intersection for precise clipping at range boundaries.
+ *
+ * v1.3.3: Also returns byTid (per-tab breakdown) for entries that carry `tid`.
+ * Legacy entries without tid contribute to byHostname only (not byTid).
+ *
+ * @param {number} rangeStartMs
+ * @param {number} rangeEndMs
+ * @param {string[]} [blockedOverride] - Optional pre-loaded blocked list to avoid re-reading storage
+ * @returns {Promise<{total: number, byHostname: Object.<string, number>, byTid: Object.<string, number>}>}
+ */
+async function aggregateTimeLog(rangeStartMs, rangeEndMs, blockedOverride) {
+  const entries = await readTimeLogRange(rangeStartMs, rangeEndMs);
+
+  // Use provided blocked list or load from storage
+  const blocked = blockedOverride
+    ?? (await chrome.storage.local.get('blockedDomains')).blockedDomains
+    ?? [];
+
+  let total = 0;
+  const byHostname = {};
+  const byTid = {};
+
+  for (const entry of entries) {
+    if (entry.h === '__internal__') continue;
+    if (blocked.includes(entry.h)) continue;
+
+    // Interval intersection: clip to range
+    const overlapStart = Math.max(entry.s, rangeStartMs);
+    const overlapEnd = Math.min(entry.e, rangeEndMs);
+    if (overlapStart >= overlapEnd) continue;
+
+    const ms = overlapEnd - overlapStart;
+    total += ms;
+    byHostname[entry.h] = (byHostname[entry.h] || 0) + ms;
+    if (entry.tid != null) {
+      byTid[entry.tid] = (byTid[entry.tid] || 0) + ms;
+    }
+  }
+
+  return { total, byHostname, byTid };
+}
+
+/**
+ * Get LOCAL "today" boundaries as UTC timestamps.
+ * @returns {{ dayStartMs: number, dayEndMs: number }}
+ */
+function getLocalTodayRange() {
+  const now = new Date();
+  const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return {
+    dayStartMs: dayStart.getTime(),
+    dayEndMs: dayStart.getTime() + 86400000,
+  };
+}
+
+/**
+ * v1.3.5: aggregateOpenTabsLifetime() was removed. Per-tab lifetime is now a
+ * monotonic counter maintained by background.js (cumulativeMs), not derived
+ * from timeLog. This eliminates the "time goes backwards" class of bugs.
+ *
+ * Legacy note: earlier versions read [earliestFirstSeen, now] from timeLog and
+ * dispatched entries by tid. That approach broke whenever the SW was killed
+ * mid-slice and woke without recovering — leading to visible rollbacks.
+ */
+
+/**
+ * Get today's total browsing time from timeLog.
+ * Uses a cache to avoid reading storage every refresh cycle.
+ * @returns {Promise<number>} Total milliseconds for local today
  */
 async function getTodayHistoricalTotal() {
   const now = Date.now();
-  // Use cached value if fresh enough
-  if (now - lastHistoricalCacheTime < HISTORICAL_CACHE_INTERVAL_MS) {
-    return todayHistoricalTotalMs;
+  if (now - lastTimeLogCacheTime < TIMELOG_CACHE_INTERVAL_MS) {
+    return todayTimeLogTotalMs;
   }
-
-  const today = new Date().toISOString().split('T')[0];
-  const prefix = `dailyHistory.${today}.`;
 
   try {
-    // Get all storage keys at once, then filter
-    const allItems = await new Promise(resolve => {
-      chrome.storage.local.get(null, items => resolve(items));
-    });
-    let total = 0;
-    for (const key of Object.keys(allItems)) {
-      if (key.startsWith(prefix)) {
-        const hostname = key.slice(prefix.length);
-        if (hostname !== '__internal__') {
-          total += allItems[key] || 0;
-        }
-      }
-    }
-    todayHistoricalTotalMs = total;
-    lastHistoricalCacheTime = now;
+    const { dayStartMs, dayEndMs } = getLocalTodayRange();
+    const { total, byHostname } = await aggregateTimeLog(dayStartMs, dayEndMs);
+    todayTimeLogTotalMs = total;
+    todayTimeLogByHostname = byHostname;
+    lastTimeLogCacheTime = now;
   } catch {
-    // Ignore errors, keep using cached value
+    // Keep using cached value on error
   }
 
-  return todayHistoricalTotalMs;
+  return todayTimeLogTotalMs;
 }
 
 /**
  * Format milliseconds into a human-readable duration string.
- * - < 1 min:    "刚刚" / "计时中..."
- * - < 1 hour:   "45分钟"
- * - ≥ 1 hour:   "1.5小时"
- * - ≥ 1 day:    "1天3小时"
+ *
+ * v1.3.5: Minimum display unit is now 1 minute for non-active contexts
+ * (domain cards + tab chips), to avoid the "death second" illusion where a
+ * paused counter shows e.g. "3s" forever. For callers that want seconds
+ * (header total-time with active slice), pass allowSeconds=true.
+ *
+ * Modes:
+ *   - < 1 min + allowSeconds: "45秒" / "45s"
+ *   - < 1 min otherwise:      "<1分钟" / "<1m"
+ *   - < 1 hour:               "45分钟"
+ *   - ≥ 1 hour:               "1.5小时"
+ *   - ≥ 1 day:                "1天3小时"
+ *
  * @param {number} ms - Duration in milliseconds
+ * @param {{allowSeconds?: boolean}} [opts]
  * @returns {string}
  */
-function formatDuration(ms) {
+function formatDuration(ms, opts) {
   if (ms < 0) ms = 0;
   const isZh = I18N.currentLang === 'zh';
+  const allowSeconds = !!(opts && opts.allowSeconds);
   const seconds = Math.floor(ms / 1000);
-  if (seconds < 5) return isZh ? '刚刚' : 'Just now';
+
+  if (allowSeconds) {
+    if (seconds < 5) return isZh ? '刚刚' : 'Just now';
+    if (seconds < 60) return isZh ? `${seconds}秒` : `${seconds}s`;
+  } else {
+    // v1.3.5: minute is the minimum unit for non-active displays
+    if (seconds < 60) return isZh ? '<1分钟' : '<1m';
+  }
+
   const minutes = Math.floor(ms / 60000);
   if (minutes < 60) return isZh ? `${minutes}分钟` : `${minutes}m`;
   const hours = minutes / 60;
@@ -337,42 +569,68 @@ function formatDuration(ms) {
 }
 
 /**
- * Refresh the timer display — called every second via setInterval.
- * Updates header total time and all visible domain card times.
+ * Refresh the timer display — called every 5s via setInterval (with visibility control).
+ * Updates header total time and all visible domain card times + per-tab badges.
+ *
+ * v1.3.5 time models:
+ *   - Header "今日工作"       = historicalMs (from timeLog, dayStart → now)
+ *                              + activeRunningMs (current unfinalised slice)
+ *   - Per-tab chip badge      = tabInfo[id].cumulativeMs  (monotonic, from SW)
+ *                              + activeRunningMs if this is the active tab
+ *   - Domain card time        = Σ(chip times) across open tabs in that domain
+ *
+ * cumulativeMs comes directly from background.js and is monotonic — it never
+ * decreases. Time tracking for non-active tabs jumps when the user switches
+ * away from them (that's when the slice is finalised), which is the correct
+ * user-visible model: "how much of the tab's active foreground time".
  */
 async function refreshTimerDisplay() {
-  tabSessionData = await getTabSessionData();
-  lastTimerRefresh = Date.now();
+  await getSessionData();
 
-  // Update header total time = today's historical + current session
-  let sessionMs = 0;
-  const sessions = Object.values(tabSessionData);
-  for (const session of sessions) {
-    sessionMs += (session.totalTime || 0);
+  // ── HEADER: today total (unchanged) ──
+  const historicalMs = await getTodayHistoricalTotal();
+
+  // activeMs: the current active tab's unfinalised running time, clipped to today
+  let activeMsToday = 0;
+  if (activeRunningMs > 0 && activeHostname && activeHostname !== '__internal__') {
+    const { dayStartMs, dayEndMs } = getLocalTodayRange();
+    const now = Date.now();
+    const runStart = now - activeRunningMs;
+    const overlapStart = Math.max(runStart, dayStartMs);
+    const overlapEnd = Math.min(now, dayEndMs);
+    if (overlapStart < overlapEnd) {
+      activeMsToday = overlapEnd - overlapStart;
+    }
   }
 
-  // Add today's historical total (cached, refreshed every 30s)
-  const historicalMs = await getTodayHistoricalTotal();
-  const totalMs = historicalMs + sessionMs;
-
+  const totalMs = historicalMs + activeMsToday;
   const totalEl = document.getElementById('totalWorkTime');
   if (totalEl) {
     totalEl.textContent = formatDuration(totalMs);
   }
 
-  // Update per-group time in domain cards
-  // Group hostname → total time
-  const groupTimes = {};
-  for (const session of Object.values(tabSessionData)) {
-    if (session.hostname && session.hostname !== '__internal__') {
-      groupTimes[session.hostname] = (groupTimes[session.hostname] || 0) + (session.totalTime || 0);
+  // ── DOMAIN CARDS + TAB CHIPS: direct read from cumulativeMs ──
+  // No more aggregation over timeLog — the SW already accumulated this.
+  const cardTimes = {};  // hostname → ms
+  const tabTimes = {};   // tabId → ms
+
+  for (const tidStr in tabInfoMap) {
+    const info = tabInfoMap[tidStr];
+    if (!info || !info.hostname || info.hostname === '__internal__') continue;
+    let ms = info.cumulativeMs || 0;
+    // Merge the unfinalised slice into the active tab
+    if (activeTabId != null && String(activeTabId) === tidStr && activeRunningMs > 0) {
+      ms += activeRunningMs;
     }
+    tabTimes[tidStr] = ms;
+    cardTimes[info.hostname] = (cardTimes[info.hostname] || 0) + ms;
   }
 
-  // Find each domain card and update its time badge
-  for (const hostname in groupTimes) {
-    const timeMs = groupTimes[hostname];
-    const card = document.querySelector(`.mission-card[data-hostname="${hostname}"]`);
+  // Update domain cards
+  for (const hostname in cardTimes) {
+    const timeMs = cardTimes[hostname];
+    // Review fix #13: escape hostname to avoid breaking CSS selector
+    const card = document.querySelector(`.mission-card[data-hostname="${CSS.escape(hostname)}"]`);
     if (card) {
       const timeEl = card.querySelector('.group-time-badge');
       if (timeEl) {
@@ -380,7 +638,23 @@ async function refreshTimerDisplay() {
       }
     }
   }
+
+  // Update per-tab chip badges
+  for (const tidStr in tabTimes) {
+    const ms = tabTimes[tidStr];
+    const chip = document.querySelector(`.page-chip[data-tab-id="${tidStr}"]`);
+    if (chip) {
+      const badge = chip.querySelector('.chip-time-badge');
+      if (badge) {
+        badge.textContent = formatDuration(ms);
+        badge.classList.toggle('chip-time-zero', ms < 60000);
+      }
+    }
+  }
 }
+
+// v1.3.5: refreshLifetimeCache() was removed — lifetime now comes from
+// cumulativeMs in GET_SESSION_DATA, which is always fresh (<5s old).
 
 /**
  * fetchOpenTabs()
@@ -838,39 +1112,47 @@ async function openSettingsPanel() {
 
 /**
  * exportAllHistory()
- * Reads all dailyHistory.* keys and triggers a JSON file download.
+ * Exports timeLog + legacy dailyHistory + blockedDomains as a JSON file.
+ * v1.3.1: primary data is timeLog; dailyHistory included for backward compat.
  */
 async function exportAllHistory() {
-  const allKeys = await new Promise(resolve => {
-    chrome.storage.local.get(null, items => resolve(Object.keys(items)));
+  const allItems = await new Promise(resolve => {
+    chrome.storage.local.get(null, resolve);
   });
 
-  const historyKeys = allKeys.filter(k => k.startsWith('dailyHistory.') || k === 'blockedDomains');
-  if (historyKeys.length === 0) {
-    showToast('没有可导出的历史记录');
-    return;
+  const exportData = { __format: 'tempus-v1.3.1' };
+  let entryCount = 0;
+
+  for (const [key, val] of Object.entries(allItems)) {
+    if (key.startsWith('timeLog.') || key.startsWith('dailyHistory.') || key.startsWith('hourlyData.') || key === 'blockedDomains') {
+      exportData[key] = val;
+      entryCount++;
+    }
   }
 
-  const exportData = {};
-  for (const key of historyKeys) {
-    const val = await new Promise(resolve => chrome.storage.local.get(key, r => resolve(r[key])));
-    exportData[key] = val;
+  if (entryCount === 0) {
+    showToast(I18N.currentLang === 'zh' ? '没有可导出的历史记录' : 'No history to export');
+    return;
   }
 
   const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  const date = new Date().toISOString().split('T')[0];
+  // Use LOCAL date for the filename (display purpose)
+  const now = new Date();
+  const localDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   a.href = url;
-  a.download = `tempus-history-${date}.json`;
+  a.download = `tempus-history-${localDate}.json`;
   a.click();
   URL.revokeObjectURL(url);
-  showToast(`已导出 ${historyKeys.length} 条历史记录`);
+  showToast(I18N.currentLang === 'zh' ? `已导出 ${entryCount} 条历史记录` : `Exported ${entryCount} history entries`);
 }
 
 /**
  * importHistory(file)
  * Parses a JSON file and writes its data back to chrome.storage.local.
+ * v1.3.1: Supports both timeLog (new) and dailyHistory (legacy) formats.
+ * Legacy dailyHistory entries are auto-converted to timeLog during migration.
  */
 async function importHistory(file) {
   try {
@@ -878,23 +1160,26 @@ async function importHistory(file) {
     const data = JSON.parse(text);
 
     if (typeof data !== 'object' || data === null || Array.isArray(data)) {
-      showToast('导入失败：文件格式错误');
+      showToast(I18N.currentLang === 'zh' ? '导入失败：文件格式错误' : 'Import failed: invalid file format');
       return;
     }
 
     const entries = Object.entries(data);
     if (entries.length === 0) {
-      showToast('导入文件为空');
+      showToast(I18N.currentLang === 'zh' ? '导入文件为空' : 'Import file is empty');
       return;
     }
 
-    // Validate: only allow known key patterns (dailyHistory.*, hourlyData.*, blockedDomains)
-    const allowedPrefixes = ['dailyHistory.', 'hourlyData.', 'blockedDomains'];
+    // Validate: only allow known key patterns
+    const allowedPrefixes = ['timeLog.', 'dailyHistory.', 'hourlyData.', 'blockedDomains'];
     const safeData = {};
     let skipped = 0;
     for (const [key, val] of entries) {
+      if (key === '__format') continue; // skip metadata
+      if (key === '__timeLogMigrated') continue; // skip migration flag
       if (allowedPrefixes.some(p => key === p || key.startsWith(p))) {
-        // Validate value types: dailyHistory values should be numbers, hourlyData should be objects
+        // Type validation
+        if (key.startsWith('timeLog.') && !Array.isArray(val)) { skipped++; continue; }
         if (key.startsWith('dailyHistory.') && typeof val !== 'number') { skipped++; continue; }
         if (key.startsWith('hourlyData.') && (typeof val !== 'object' || val === null)) { skipped++; continue; }
         safeData[key] = val;
@@ -904,17 +1189,52 @@ async function importHistory(file) {
     }
 
     if (Object.keys(safeData).length === 0) {
-      showToast('导入失败：没有有效的历史记录数据');
+      showToast(I18N.currentLang === 'zh' ? '导入失败：没有有效的历史记录数据' : 'Import failed: no valid history data');
       return;
     }
 
+    // Merge timeLog entries (append to existing shards rather than overwrite)
+    // Review fix #15: deduplicate based on s+e+h combination so repeated imports don't double data
+    const timeLogKeys = Object.keys(safeData).filter(k => k.startsWith('timeLog.'));
+    let dedupedCount = 0;
+    if (timeLogKeys.length > 0) {
+      const existingShards = await new Promise(resolve => {
+        chrome.storage.local.get(timeLogKeys, resolve);
+      });
+      for (const key of timeLogKeys) {
+        const existing = existingShards[key] || [];
+        const incoming = safeData[key] || [];
+
+        // Build a Set of existing entry keys for O(1) lookup
+        const existingKeys = new Set(existing.map(e => `${e.s}|${e.e}|${e.h}`));
+        const newEntries = [];
+        for (const entry of incoming) {
+          const k = `${entry.s}|${entry.e}|${entry.h}`;
+          if (existingKeys.has(k)) {
+            dedupedCount++;
+          } else {
+            existingKeys.add(k);
+            newEntries.push(entry);
+          }
+        }
+        safeData[key] = [...existing, ...newEntries];
+      }
+    }
+
     await chrome.storage.local.set(safeData);
-    const msg = skipped > 0
-      ? `已导入 ${Object.keys(safeData).length} 条记录（跳过 ${skipped} 条无效数据），请刷新页面`
-      : `已导入 ${Object.keys(safeData).length} 条历史记录，请刷新页面`;
+
+    // Build toast message with skipped + deduped info
+    const parts = [];
+    const isZh = I18N.currentLang === 'zh';
+    parts.push(isZh
+      ? `已导入 ${Object.keys(safeData).length} 条记录`
+      : `Imported ${Object.keys(safeData).length} entries`);
+    if (skipped > 0) parts.push(isZh ? `跳过 ${skipped} 条无效数据` : `skipped ${skipped} invalid`);
+    if (dedupedCount > 0) parts.push(isZh ? `去重 ${dedupedCount} 条` : `${dedupedCount} duplicates removed`);
+    const msg = parts.join('，') + (isZh ? '，请刷新页面' : ', please refresh');
     showToast(msg);
   } catch (e) {
-    showToast('导入失败：文件格式错误');
+    showToast(I18N.currentLang === 'zh' ? '导入失败：文件格式错误' : 'Import failed: invalid file format');
   }
 }
 
@@ -1306,16 +1626,26 @@ function checkDomainSprawl() {
  *
  * Renders a 24-hour heatmap below the productivity banner in Today view.
  * Shows browsing intensity per hour for the top domains.
+ *
+ * v1.3.1: Computes from timeLog using local day boundaries.
+ * Each entry's overlap is clipped to the local day, then assigned to the local hour.
  */
 async function renderHeatmap() {
-  const today = new Date().toISOString().split('T')[0];
   const containerId = 'heatmapContainer';
   let container = document.getElementById(containerId);
   if (!container) return;
 
+  // Get local today boundaries
+  const { dayStartMs, dayEndMs } = getLocalTodayRange();
+
   let hourlyData = {};
   try {
-    const resp = await chrome.runtime.sendMessage({ type: 'GET_HOURLY_DATA', date: today });
+    // Ask background to compute hourly data from timeLog
+    const resp = await chrome.runtime.sendMessage({
+      type: 'GET_HOURLY_DATA',
+      localDayStartMs: dayStartMs,
+      localDayEndMs: dayEndMs,
+    });
     hourlyData = (resp && resp.hourlyData) ? resp.hourlyData : {};
   } catch (e) {
     console.warn('[tempus] Failed to get hourly data:', e);
@@ -1372,9 +1702,9 @@ async function renderHeatmap() {
       <div class="heatmap-body">${rows}</div>
     </div>
     <div class="heatmap-legend">
-      <span style="color:var(--muted);font-size:10px;">少</span>
+      <span style="color:var(--muted);font-size:10px;">${I18N.currentLang === 'zh' ? '少' : 'Less'}</span>
       <div class="heatmap-legend-bar"></div>
-      <span style="color:var(--muted);font-size:10px;">多</span>
+      <span style="color:var(--muted);font-size:10px;">${I18N.currentLang === 'zh' ? '多' : 'More'}</span>
     </div>
   `;
 }
@@ -1410,8 +1740,9 @@ async function renderProductivityBanner(range) {
   const topDomain = stats[0]?.friendlyName || stats[0]?.hostname || '';
   const topPct = totalMs > 0 ? Math.round((stats[0].totalMs / totalMs) * 100) : 0;
 
-  // Generate a warm, varied message
-  const messages = {
+  // Generate a warm, varied message (Review fix #12: add English versions)
+  const isZh = I18N.currentLang === 'zh';
+  const messages = isZh ? {
     today: [
       `今天工作了 ${totalHours} 小时，继续保持 💪`,
       `${totalHours} 小时，专注的你很棒 🌟`,
@@ -1421,6 +1752,17 @@ async function renderProductivityBanner(range) {
       `本周累计 ${totalHours} 小时，效率不错 📊`,
       `${totalHours} 小时的一周，${topDomain} 占 ${topPct}% 的时间`,
       `这周你工作了 ${totalHours} 小时，继续加油 💪`,
+    ],
+  } : {
+    today: [
+      `${totalHours}h of focused work today, keep it up 💪`,
+      `${totalHours} hours in — great focus today 🌟`,
+      `${totalHours}h today · ${topDomain} took ${topPct}% of it`,
+    ],
+    week: [
+      `${totalHours}h this week — solid productivity 📊`,
+      `A ${totalHours}-hour week · ${topDomain} at ${topPct}%`,
+      `${totalHours} hours this week, keep going 💪`,
     ],
   };
 
@@ -1584,14 +1926,16 @@ function buildOverflowChips(hiddenTabs, urlCounts = {}) {
     const count    = urlCounts[tab.url] || 1;
     const dupeTag  = count > 1 ? ` <span class="chip-dupe-badge">(${count}x)</span>` : '';
     const chipClass = count > 1 ? ' chip-has-dupes' : '';
-    const safeUrl   = (tab.url || '').replace(/"/g, '&quot;');
-    const safeTitle = label.replace(/"/g, '&quot;');
+    // Use escapeHtml consistently to prevent XSS via exotic titles/URLs
+    const safeUrl   = escapeHtml(tab.url || '');
+    const safeTitle = escapeHtml(label);
     let domain = '';
     try { domain = new URL(tab.url).hostname; } catch {}
     const faviconUrl = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=16` : '';
-    return `<div class="page-chip clickable${chipClass}" data-action="focus-tab" data-tab-url="${safeUrl}" title="${safeTitle}">
+    return `<div class="page-chip clickable${chipClass}" data-action="focus-tab" data-tab-url="${safeUrl}" data-tab-id="${tab.id}" title="${safeTitle}">
       ${faviconUrl ? `<img class="chip-favicon" src="${faviconUrl}" alt="" onerror="this.style.display='none'">` : ''}
-      <span class="chip-text">${label}</span>${dupeTag}
+      <span class="chip-text">${escapeHtml(label)}</span>
+      <span class="chip-time-badge chip-time-zero" title="${I18N.currentLang === 'zh' ? '此标签累计使用时长' : 'Cumulative time on this tab'}"></span>${dupeTag}
       <div class="chip-actions">
         <button class="chip-action chip-save" data-action="defer-single-tab" data-tab-url="${safeUrl}" data-tab-title="${safeTitle}" title="Save for later">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0 1 11.186 0Z" /></svg>
@@ -1643,7 +1987,7 @@ function renderDomainCard(group, hostnameStaleness = {}) {
   // Time badge — shows cumulative time spent on this group
   const groupHostname = group.domain === '__landing-pages__' ? '' : group.domain;
   const timeBadge = groupHostname
-    ? `<span class="group-time-badge" data-hostname="${groupHostname}">—</span>`
+    ? `<span class="group-time-badge" data-hostname="${escapeHtml(groupHostname)}">—</span>`
     : '';
 
   const dupeBadge = hasDupes
@@ -1705,7 +2049,8 @@ function renderDomainCard(group, hostnameStaleness = {}) {
          </button>`;
     return `<div class="page-chip clickable${chipClass}" data-action="${isDormant ? 'wake-tab' : 'focus-tab'}" data-tab-url="${safeUrl}" data-tab-id="${tab.id}" title="${safeTitle}${isDormant ? ' (休眠)' : ''}">
       ${faviconUrl ? `<img class="chip-favicon" src="${faviconUrl}" alt="" onerror="this.style.display='none'">` : ''}
-      <span class="chip-text">${escapeHtml(label)}</span>${dupeTag}${zzzBadge}
+      <span class="chip-text">${escapeHtml(label)}</span>
+      <span class="chip-time-badge chip-time-zero" title="${I18N.currentLang === 'zh' ? '此标签累计使用时长' : 'Cumulative time on this tab'}"></span>${dupeTag}${zzzBadge}
       <div class="chip-actions">${actions}</div>
     </div>`;
   }).join('') + (extraCount > 0 ? buildOverflowChips(uniqueTabs.slice(8), urlCounts) : '');
@@ -1733,7 +2078,7 @@ function renderDomainCard(group, hostnameStaleness = {}) {
         ? `${Math.floor(daysSince/30)} ${I18N.t('months stale')}`
         : `${daysSince} ${I18N.t('days stale')}`;
       actionsHtml += `
-        <button class="action-btn" data-action="close-stale-domain" data-hostname="${groupHostname2}">
+        <button class="action-btn" data-action="close-stale-domain" data-hostname="${escapeHtml(groupHostname2)}">
           ${I18N.t('Clear')} ${staleLabel}
         </button>`;
     }
@@ -1744,14 +2089,14 @@ function renderDomainCard(group, hostnameStaleness = {}) {
   if (groupHostname2 && nonDormantCount > 0) {
     const sleepTitle = I18N.currentLang === 'zh' ? '休眠这些标签，节省内存' : 'Put these tabs to sleep to save memory';
     actionsHtml += `
-      <button class="action-btn" data-action="sleep-domain" data-hostname="${groupHostname2}" title="${sleepTitle}">
+      <button class="action-btn" data-action="sleep-domain" data-hostname="${escapeHtml(groupHostname2)}" title="${sleepTitle}">
         💤 ${I18N.t('Sleep')}
       </button>`;
   }
 
   const hasAmberBar = hasDupes || (groupHostname2 && hostnameStaleness[groupHostname2] && Math.floor((Date.now() - hostnameStaleness[groupHostname2]) / 86400000) >= 7);
   return `
-    <div class="mission-card domain-card ${hasAmberBar ? 'has-amber-bar' : 'has-neutral-bar'}" data-domain-id="${stableId}" data-hostname="${isLanding ? '' : group.domain}">
+    <div class="mission-card domain-card ${hasAmberBar ? 'has-amber-bar' : 'has-neutral-bar'}" data-domain-id="${stableId}" data-hostname="${isLanding ? '' : escapeHtml(group.domain)}">
       <div class="status-bar"></div>
       <div class="mission-content">
         <div class="mission-top">
@@ -1900,6 +2245,16 @@ async function renderStaticDashboard() {
   const dateEl     = document.getElementById('dateDisplay');
   if (greetingEl) greetingEl.textContent = getGreeting();
   if (dateEl)     dateEl.textContent     = getDateDisplay();
+
+  // --- Footer version (v1.3.4+) ---
+  // Pulled from manifest so we only bump the version in one place.
+  const versionEl = document.getElementById('appVersion');
+  if (versionEl && !versionEl.textContent) {
+    try {
+      const v = chrome.runtime.getManifest().version;
+      if (v) versionEl.textContent = `v${v}`;
+    } catch {}
+  }
 
   // --- Fetch tabs ---
   await fetchOpenTabs();
@@ -2062,7 +2417,8 @@ async function renderStaticDashboard() {
   // --- Render "Saved for Later" column ---
   await renderDeferredColumn();
 
-  // --- Initial timer refresh (then auto-refresh every second) ---
+  // --- Initial timer refresh (then auto-refresh every 5s via visibility control) ---
+  // v1.3.5: lifetime cache removed — refreshTimerDisplay reads cumulativeMs directly
   await refreshTimerDisplay();
 }
 
@@ -2624,78 +2980,54 @@ document.addEventListener('input', async (e) => {
    ---------------------------------------------------------------- */
 
 /**
- * getDateRange(range)
- * Returns start and end ISO date strings for the given range.
- * @param {'week'|'month'|'year'} range
- * @returns {{ start: string, end: string }}
+ * getLocalDateRangeMs(range)
+ * Returns LOCAL date range as UTC timestamps for aggregation.
+ * @param {'day'|'week'|'month'|'year'} range
+ * @returns {{ startMs: number, endMs: number }}
  */
-function getDateRange(range) {
+function getLocalDateRangeMs(range) {
   const now = new Date();
-  const end = now.toISOString().split('T')[0];
-  let start;
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
+  let rangeStart;
   if (range === 'week') {
-    const d = new Date(now);
-    d.setDate(d.getDate() - 7);
-    start = d.toISOString().split('T')[0];
+    rangeStart = new Date(todayStart);
+    rangeStart.setDate(rangeStart.getDate() - 6); // last 7 days including today
   } else if (range === 'month') {
-    const d = new Date(now);
-    d.setDate(d.getDate() - 30);
-    start = d.toISOString().split('T')[0];
+    rangeStart = new Date(todayStart);
+    rangeStart.setDate(rangeStart.getDate() - 29); // last 30 days
   } else if (range === 'year') {
-    const d = new Date(now);
-    d.setDate(d.getDate() - 365);
-    start = d.toISOString().split('T')[0];
+    rangeStart = new Date(todayStart);
+    rangeStart.setDate(rangeStart.getDate() - 364); // last 365 days
   } else {
     // 'day' or 'today' — today only
-    start = end;
+    rangeStart = todayStart;
   }
 
-  return { start, end };
+  return {
+    startMs: rangeStart.getTime(),
+    endMs: todayStart.getTime() + 86400000, // end of local today
+  };
 }
 
 /**
  * getStatsData(range)
- * Reads all dailyHistory entries for the given range and aggregates
- * by hostname. Returns sorted array { hostname, totalMs }.
+ * Reads timeLog entries for the given range and aggregates by hostname.
+ * Returns sorted array { hostname, totalMs, friendlyName }.
+ * v1.3.1: Uses timeLog with interval intersection — timezone-correct.
  * @param {'today'|'week'|'month'|'year'} range
  * @returns {Promise<Array<{hostname: string, totalMs: number, friendlyName: string}>>}
  */
 async function getStatsData(range) {
-  const { start, end } = getDateRange(range === 'today' ? 'day' : range);
+  const { startMs, endMs } = getLocalDateRangeMs(range === 'today' ? 'day' : range);
 
-  // Load blocked domains from storage
+  // Load blocked domains from storage once, pass to aggregateTimeLog to avoid re-reading
   const { blockedDomains: storedBlocked = [] } = await chrome.storage.local.get('blockedDomains');
   blockedDomains = storedBlocked;
 
-  // Collect all dailyHistory keys in storage
-  const allKeys = await new Promise(resolve => {
-    chrome.storage.local.get(null, items => {
-      resolve(Object.keys(items));
-    });
-  });
+  const { byHostname } = await aggregateTimeLog(startMs, endMs, storedBlocked);
 
-  const hostnameTotals = {};
-  const prefix = 'dailyHistory.';
-
-  for (const key of allKeys) {
-    if (!key.startsWith(prefix)) continue;
-    // key format: dailyHistory.YYYY-MM-DD.hostname
-    const rest = key.slice(prefix.length);
-    const dot2 = rest.indexOf('.');
-    if (dot2 === -1) continue;
-    const dateStr = rest.slice(0, dot2);
-    if (dateStr < start || dateStr > end) continue;
-
-    const hostname = rest.slice(dot2 + 1);
-    // Skip blocked domains and __internal__ placeholder
-    if (blockedDomains.includes(hostname)) continue;
-    if (hostname === '__internal__') continue;
-    const ms = (hostnameTotals[hostname] || 0) + (await chrome.storage.local.get(key))[key];
-    hostnameTotals[hostname] = ms;
-  }
-
-  const result = Object.entries(hostnameTotals)
+  const result = Object.entries(byHostname)
     .map(([hostname, totalMs]) => ({
       hostname,
       totalMs,
@@ -2709,25 +3041,41 @@ async function getStatsData(range) {
 
 /**
  * clearDomainHistory(hostname)
- * Deletes all dailyHistory.{date}.{hostname} keys from storage.
+ * Removes all timeLog entries for the given hostname from all monthly shards.
+ * Also cleans up legacy dailyHistory and hourlyData keys.
  */
 async function clearDomainHistory(hostname) {
-  const allKeys = await new Promise(resolve => {
-    chrome.storage.local.get(null, items => resolve(Object.keys(items)));
+  const allItems = await new Promise(resolve => {
+    chrome.storage.local.get(null, resolve);
   });
-  const prefix = 'dailyHistory.';
-  const toDelete = allKeys.filter(key => {
-    if (!key.startsWith(prefix)) return false;
-    const rest = key.slice(prefix.length);
-    const dot2 = rest.indexOf('.');
-    if (dot2 === -1) return false;
-    const h = rest.slice(dot2 + 1);
-    return h === hostname;
-  });
-  // Also remove hourly heatmap data for this hostname
+
+  const toWrite = {};
+  const toDelete = [];
+
+  for (const [key, val] of Object.entries(allItems)) {
+    // Filter timeLog shards: remove entries matching hostname
+    if (key.startsWith('timeLog.') && Array.isArray(val)) {
+      const filtered = val.filter(entry => entry.h !== hostname);
+      if (filtered.length !== val.length) {
+        toWrite[key] = filtered;
+      }
+    }
+    // Delete legacy dailyHistory keys for this hostname
+    if (key.startsWith('dailyHistory.')) {
+      const rest = key.slice('dailyHistory.'.length);
+      const dot2 = rest.indexOf('.');
+      if (dot2 !== -1 && rest.slice(dot2 + 1) === hostname) {
+        toDelete.push(key);
+      }
+    }
+  }
+
+  // Delete legacy hourlyData for this hostname
   const hourlyKey = `hourlyData.${hostname}`;
-  if (allKeys.includes(hourlyKey)) {
-    toDelete.push(hourlyKey);
+  if (allItems[hourlyKey]) toDelete.push(hourlyKey);
+
+  if (Object.keys(toWrite).length > 0) {
+    await chrome.storage.local.set(toWrite);
   }
   if (toDelete.length > 0) {
     await chrome.storage.local.remove(toDelete);
@@ -2849,8 +3197,34 @@ let hiddenDomains = [];
 /** @type {string[]} Permanently blocked domains loaded from storage */
 let blockedDomains = [];
 
-// Refresh timer display every second
-setInterval(refreshTimerDisplay, 1000);
+// ─── Timer refresh with visibility control (v1.3.1) ──────────────────────────
+// Refresh every 5s when visible; pause when tab is hidden.
+function startTimerInterval() {
+  if (timerIntervalId) return;
+  refreshTimerDisplay(); // immediate refresh on start
+  timerIntervalId = setInterval(refreshTimerDisplay, 5000);
+}
+
+function stopTimerInterval() {
+  if (timerIntervalId) {
+    clearInterval(timerIntervalId);
+    timerIntervalId = null;
+  }
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    stopTimerInterval();
+  } else {
+    // Immediately refresh when becoming visible, then resume interval
+    startTimerInterval();
+  }
+});
+
+// Start timer if page is currently visible
+if (!document.hidden) {
+  startTimerInterval();
+}
 
 // Update privacy button tooltip when duration select changes
 const privateModeSelect = document.getElementById('privateModeSelect');
@@ -2954,6 +3328,37 @@ function updateUIText() {
   // Update banners (they'll reset text when shown next time, but update current if visible)
   checkTempusDupes();
   checkDomainSprawl();
+
+  // Update settings panel text (Review fix #10)
+  const settingsTitle = document.getElementById('settingsTitle');
+  if (settingsTitle) settingsTitle.textContent = I18N.currentLang === 'zh' ? '设置' : 'Settings';
+
+  const settingsBlockedTitle = document.getElementById('settingsBlockedTitle');
+  if (settingsBlockedTitle) settingsBlockedTitle.textContent = I18N.currentLang === 'zh' ? '隐私名单' : 'Privacy Blocklist';
+
+  const settingsBlockedDesc = document.getElementById('settingsBlockedDesc');
+  if (settingsBlockedDesc) settingsBlockedDesc.textContent = I18N.currentLang === 'zh'
+    ? '以下域名已屏蔽，不会参与任何统计。移除后恢复统计。'
+    : 'These domains are blocked from all tracking. Remove to resume tracking.';
+
+  const blockedEmpty = document.getElementById('blockedEmpty');
+  if (blockedEmpty) blockedEmpty.textContent = I18N.currentLang === 'zh' ? '隐私名单为空' : 'Blocklist is empty';
+
+  const settingsMigrationTitle = document.getElementById('settingsMigrationTitle');
+  if (settingsMigrationTitle) settingsMigrationTitle.textContent = I18N.currentLang === 'zh' ? '历史记录迁移' : 'History Migration';
+
+  const settingsMigrationDesc = document.getElementById('settingsMigrationDesc');
+  if (settingsMigrationDesc) settingsMigrationDesc.textContent = I18N.currentLang === 'zh'
+    ? '导出所有浏览时长记录到文件，重装插件后可导入恢复。'
+    : 'Export all browsing time data to a file. Import to restore after reinstalling.';
+
+  const exportBtn = document.getElementById('exportHistoryBtn');
+  if (exportBtn) exportBtn.innerHTML = exportBtn.innerHTML.replace(/导出历史记录|Export History/,
+    I18N.currentLang === 'zh' ? '导出历史记录' : 'Export History');
+
+  const importBtn = document.getElementById('importHistoryBtn');
+  if (importBtn) importBtn.innerHTML = importBtn.innerHTML.replace(/导入历史记录|Import History/,
+    I18N.currentLang === 'zh' ? '导入历史记录' : 'Import History');
 
   // Update deferred column
   const deferredTitle = document.querySelector('#deferredColumn .section-header h2');

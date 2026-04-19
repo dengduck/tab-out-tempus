@@ -683,6 +683,24 @@ header {
   font-weight: 600;
 }
 
+/* v1.3.3: Per-tab cumulative time badge (since tab was opened).
+   Sits right after .chip-text, before any dupe/dormant badges. */
+.chip-time-badge {
+  flex-shrink: 0;
+  margin-left: 6px;
+  font-size: 11px;
+  color: var(--ink-muted, #8a8378);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  opacity: 0.75;
+}
+
+/* Hide badge when the tab has accumulated <1s (either brand-new tab or no data yet) */
+.chip-time-badge.chip-time-zero {
+  display: none;
+}
+
 /* Duplicate border highlight */
 .chip-has-dupes {
   border-color: rgba(200, 113, 58, 0.25);
