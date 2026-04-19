@@ -11,7 +11,8 @@
 - ✅ Private Mode 作为 v2.0 MVP，v1 实现参考见 `docs/v1-feature-reference/private-mode.md`
 - ✅ chrome.idle API 纳入 M4 TimeTracker（60s 无键鼠暂停）
 - ✅ **M0 架构冻结完成**（2026-04-20）：ARCHITECTURE-v2.md §3 所有接口签名、§5 消息协议、§6 存储 schema、§8 UI 初始化流程、§9.2 测试用例清单全部敲定；新增决策 D9 (pauseReasons Set) / D10 (混合消息模式) / D11 (UI 订阅式增量)
-- ⏭️ 下一步：M1 骨架搭建（按 ARCHITECTURE-v2 §2 目录结构建文件占位，manifest v2 配置，能 load unpacked 显示空白 new tab page）
+- ✅ **M1 骨架搭建完成**（2026-04-20）：清空 v1 代码；按 ARCHITECTURE-v2 §2 建 background/ ui/ shared/ tests/ 共 27 个源文件；manifest v2.0.0（SW type:module，新增 alarms/idle 权限）；最小 sw.js + ui/main.js 打通 UI↔SW 通信链路（REQ_UI_READY / REQ_GET_STATE）；所有业务模块占位带 JSDoc 接口契约和目标 M 里程碑标注；新增决策 D12（confetti/swoosh 保持纯 JS 路线，不引入 assets/）
+- ⏭️ 下一步：load unpacked 验证 new tab page 能打开 + SW 连接成功；然后进 M2（tab 分组渲染）
 
 ---
 

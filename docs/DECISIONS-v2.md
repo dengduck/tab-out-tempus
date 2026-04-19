@@ -186,4 +186,33 @@
 
 ---
 
-_Last updated: 2026-04-20（M0 冻结，追加 D9-D11）_
+## D12. Confetti / Swoosh 保持纯 JS 路线，不引入 assets/ 目录（M1 发现，2026-04-20）
+
+**背景**：ARCHITECTURE-v2.md §2 的目录树原本写了：
+```
+extension/assets/
+  ├── swoosh.mp3
+  └── confetti.js  (第三方纯 JS)
+```
+但 M1 建目录时查了 v1 源码（`git show legacy-v1:extension/app.js`）才发现：
+- v1 的 confetti **是手写在 app.js 里的纯函数**（`shootConfetti` / `animateParticles`），不是第三方库
+- v1 的 swoosh **是用 Web Audio API 实时生成的**（shaped white noise + bandpass filter sweep），不需要 mp3 文件
+
+**决定**：v2 保持 v1 的实现路线：
+- `ui/components/confettiBurst.js` 用纯 JS 绘制（Canvas 或 DOM 粒子），不引入第三方库
+- swoosh 用 Web Audio API 运行时生成，不引入 mp3 资产
+- **不建 `extension/assets/` 目录**（除非未来真的需要第三方资产）
+
+**理由**：
+- 坚守"零依赖、开箱即用"哲学
+- 避免引入 MP3 这种容易被杀软 flag 的二进制资产
+- Web Audio 生成的 swoosh 声音跟 mp3 效果接近（v1 用户反馈很好），没必要多维护一个 mp3 文件
+- v1 实现可直接参考复用（`git show legacy-v1:extension/app.js | sed -n '925,1050p'`）
+
+**影响范围**：
+- `ARCHITECTURE-v2.md §2` 目录树里 assets/ 的条目**已过时**但暂不修正文档（避免连锁改动）；本决策作为覆盖性修正
+- M3 实现 confetti 时直接在 `ui/components/confettiBurst.js` 里写，不用建 assets/
+
+---
+
+_Last updated: 2026-04-20（M1 启动，追加 D12）_

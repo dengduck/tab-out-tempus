@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Tab Out Tempus v2 — Test Runner</title>
+  <style>
+    body { font-family: -apple-system, sans-serif; padding: 24px; background: #fafaf7; }
+    h1 { margin: 0 0 16px; }
+    #results { white-space: pre-wrap; font-family: Menlo, monospace; font-size: 13px; line-height: 1.6; }
+    .pass { color: #2a7a2a; }
+    .fail { color: #c42a2a; }
+    .info { color: #6b6b6b; }
+  </style>
+</head>
+<body>
+  <h1>Tab Out Tempus v2 — Test Runner</h1>
+  <p class="info">
+    使用方式：chrome-extension://&lt;id&gt;/tests/runTests.html<br />
+    所有测试在浏览器 console 和下方结果区域输出。
+  </p>
+  <div id="results"></div>
+
+  <script type="module">
+    // M1 骨架版：测试用例还没写。M4 开始逐步导入：
+    //   import './timeTracker.test.js';
+    //   import './pauseReasons.test.js';
+    //   import './timeLog.test.js';
+
+    const resultsEl = document.getElementById('results');
+    resultsEl.innerHTML = '<span class="info">（M1 骨架阶段：尚无测试用例。M4 开始会在 tests/ 目录下添加 .test.js 文件，' +
+      '在这里通过 import 注册并自动运行。）</span>';
+    console.log('[tempus] test runner loaded (M1 skeleton, no cases yet)');
+  </script>
+</body>
+</html>
