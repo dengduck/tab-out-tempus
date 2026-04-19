@@ -60,8 +60,9 @@
 **实现要点**（写进 M4 任务）：
 - `chrome.idle.setDetectionInterval(60)` —— 60s 阈值
 - 监听 `chrome.idle.onStateChanged`（idle / active / locked）
-- TimeTracker 暴露 `pauseByIdle()` / `resumeByIdle()` 接口
-- 与 Private Mode / Focus Timer 的互斥优先级：private > focus > idle
+- TimeTracker 通过 `pause('idle')` / `resume('idle')` 接入（统一的 pauseReasons Set 机制，见 D9）
+- 多个暂停源（window-blur / idle / private-mode / blacklist）**并行叠加，无优先级**——
+  任一源要求暂停就暂停，全部解除才恢复。这比"谁覆盖谁"的优先级模型更 robust，也避免了状态机复杂化。
 
 ## D5. Private Mode 保留，从 v1 移植
 
@@ -111,4 +112,78 @@
 
 ---
 
-_Last updated: 2026-04-20_
+## D9. TimeTracker 暂停模型：pauseReasons Set（M0 冻结）
+
+**决定**：TimeTracker 不用单一 `isPaused: bool`，改用 `pauseReasons: Set<PauseReason>` 多源叠加模型。
+
+**PauseReason 枚举**：
+- `'window-blur'` —— Chrome 窗口失焦（focusModel 触发）
+- `'idle'` —— chrome.idle 键鼠空闲 60s+
+- `'private-mode'` —— 用户启动了隐私计时窗口
+- `'blacklist'` —— 当前 active tab 的 hostname 在黑名单里
+- `'no-active-tab'` —— 焦点窗口没有 active tab（例如启动间隙）
+
+**状态机语义**：
+- `pauseReasons.size > 0` ⇒ 暂停（不开新 slice、不累加 cumulative）
+- `pauseReasons.size === 0` 且有焦点 tab ⇒ 计时中
+- `pause(reason)` 调用 `Set.add`；如从 0→1，finalize 当前 slice
+- `resume(reason)` 调用 `Set.delete`；如从 1→0 且有焦点 tab，开新 slice
+
+**理由**：
+- v1.3.3→1.3.5 反复踩坑的根因就是"不知道是谁把计时停了"——多个地方独立判断 isPaused，互相覆盖
+- Set 模型让每个暂停源**独立负责自己的状态**，不用考虑"别人会不会取消我的暂停"
+- 诊断面板能直接显示 `pauseReasons` 内容，邓老师一眼看懂"为什么现在没在计时"
+- 新增暂停源（未来可能的 Focus Timer strict 模式、网络离线等）只是往枚举里加一个字符串
+
+**测试要求**：`tests/pauseReasons.test.js` 必须覆盖多源叠加的全排列（见 ARCHITECTURE-v2.md §9.2）。
+
+## D10. 消息协议：请求式 + 订阅式混合（M0 冻结）
+
+**决定**：UI ↔ SW 通信采用混合模式：
+- **请求式（REQ_\*）**：UI 主动问 SW 要数据，一次性 sendMessage + sendResponse（类似 RPC）
+- **订阅式（BCAST_\*）**：SW 在状态变化时广播，UI 通过 `chrome.runtime.onMessage` 接收
+
+**消息类型前缀强制区分**（在 `shared/messages.js`）：
+- `MSG.REQ_*` — 所有请求式消息
+- `MSG.BCAST_*` — 所有广播消息
+
+**广播类型**：
+- `BCAST_TICK`（1s/次）：`{now, todayMs, activeTabId, activeTabMs}`，带动 chip badge 和 header 实时更新
+- `BCAST_TAB_CHANGE`（事件驱动）：tab 增删改，UI 做 diff 更新
+- `BCAST_STATE_CHANGE`（事件驱动）：pauseReasons / privateMode / focusTimer 变化
+
+**理由**：
+- 纯 RPC：`REQ_GET_TAB_TIME` 轮询浪费 IPC，且有延迟
+- 纯 Observer：历史视图这种"打开时一次性拉取"的场景用订阅不自然
+- 混合模式各取所长：实时数字走订阅（省轮询），快照数据走请求（省订阅复杂度）
+- 前缀强制区分让代码审查时一眼区分："这是请求还是广播？"不用读实现
+
+**BCAST_TICK 节电策略**（重要）：
+- UI 初始化时给 SW 发 `REQ_GET_STATE`，SW 记录 `hasActiveUIPort = true`
+- 只有 `hasActiveUIPort` 时才发 BCAST_TICK，避免 SW 无人在听还在广播
+- 所有 new tab page 关闭时（UI 端 `beforeunload`），发 `REQ_UI_GONE`，SW 置 false
+
+**实现约束**：
+- REQ 消息的 `onMessage` handler 必须 `return true`（MV3 异步响应要求）
+- BCAST 消息的 payload 必须 **最小化**（TICK 里不带完整 tab 列表，只带几个数字）
+- UI 订阅 API 返回 unsubscribe 函数，`historyView` 关闭时解绑
+
+## D11. UI 初始化流程：一次性请求 + 订阅式增量（M0 冻结）
+
+**决定**：`ui/main.js` 首次渲染走**请求式并发拉取**（Promise.all），之后**全部走订阅式增量**。
+
+**禁止**：
+- 首次渲染之后还用 REQ 拉数据做全量 re-render
+- `tabsGrid` 整页重绘（即使 tab 列表变了，也要按 action diff）
+
+**要求**：
+- 所有 view 按需加载（历史视图点开才订阅 + 拉数据；关闭解绑）
+- 订阅回调必须做 debounce/throttle（BCAST_TICK 1s 一次已经够，BCAST_TAB_CHANGE 如果短时间多次要合并）
+
+**理由**：
+- v1 的 app.js 每次 tab 变化都整页重绘 → 带时长 chip 时有明显闪烁
+- 订阅式增量让 UI 流畅度接近原生，零依赖前提下也能做到
+
+---
+
+_Last updated: 2026-04-20（M0 冻结，追加 D9-D11）_

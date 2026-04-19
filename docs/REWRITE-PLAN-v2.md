@@ -10,7 +10,8 @@
 - ✅ 补充决策已落地为 `docs/DECISIONS-v2.md`
 - ✅ Private Mode 作为 v2.0 MVP，v1 实现参考见 `docs/v1-feature-reference/private-mode.md`
 - ✅ chrome.idle API 纳入 M4 TimeTracker（60s 无键鼠暂停）
-- ⏭️ 下一步：M0 架构冻结（`ARCHITECTURE-v2.md` 里缺失的接口补齐）→ M1 骨架
+- ✅ **M0 架构冻结完成**（2026-04-20）：ARCHITECTURE-v2.md §3 所有接口签名、§5 消息协议、§6 存储 schema、§8 UI 初始化流程、§9.2 测试用例清单全部敲定；新增决策 D9 (pauseReasons Set) / D10 (混合消息模式) / D11 (UI 订阅式增量)
+- ⏭️ 下一步：M1 骨架搭建（按 ARCHITECTURE-v2 §2 目录结构建文件占位，manifest v2 配置，能 load unpacked 显示空白 new tab page）
 
 ---
 
