@@ -8,28 +8,45 @@
  *   2. 维护 UI 连接状态（hasActiveUIPort），决定是否广播 BCAST_TICK。
  *   3. 启动时调用各模块 init()（onInstalled / onStartup / 顶层 import 三入口）。
  *
- * **此文件是 M1 骨架版**，只保证 SW 能正常 register、console 有输出、能响应
- * REQ_GET_STATE（返回空状态）。业务实现放到 M2+ 对应模块里。
+ * 当前阶段：M2（tab 分组）。tabRegistry 已接入并能广播 BCAST_TAB_CHANGE。
  */
 
 import { MSG, classify } from '../shared/messages.js';
 import { LOG_PREFIX } from '../shared/constants.js';
+import * as tabRegistry from './tabRegistry.js';
 
-// ========== 临时状态（M1 占位，M2+ 逐步替换为真模块） ==========
+// ========== 临时状态（M1 占位，M4+ 逐步替换为真模块） ==========
 
 let hasActiveUIPort = false;
 
+// ========== 广播（SW → 所有活跃 UI） ==========
+
+/**
+ * 向所有打开的 new tab page 广播一条消息。
+ * 没人接收时 chrome.runtime.sendMessage 会 reject "no receiving end"，这里静默吞掉。
+ */
+function broadcast(type, payload) {
+  if (!hasActiveUIPort) return;  // 没 UI 在听，省一次 IPC
+  try {
+    chrome.runtime.sendMessage({ type, payload }).catch(() => { /* no receivers */ });
+  } catch (_) {
+    /* sendMessage 可能同步抛，忽略 */
+  }
+}
+
 // ========== 启动 ==========
 
-function bootstrap() {
-  console.log(LOG_PREFIX, 'SW bootstrap (v2.0.0 M1 skeleton)');
-  // M4+ 会在这里调各模块 init()
-  // timeTracker.init();
-  // focusModel.init();
-  // idleGuard.init();
-  // privateMode.init();
-  // blacklist.init();
-  // focusTimer.init();
+let bootstrapped = false;
+
+async function bootstrap() {
+  if (bootstrapped) return;
+  bootstrapped = true;
+  console.log(LOG_PREFIX, 'SW bootstrap (v2.0.0 M2 tabRegistry)');
+
+  await tabRegistry.init({ emit: broadcast });
+
+  // M4+ 会在这里继续调各模块 init()
+  // timeTracker.init(); focusModel.init(); idleGuard.init(); ...
 }
 
 // 三入口都 init（覆盖冷启动 + 事件唤醒 + 模块加载）
@@ -66,7 +83,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 /**
  * 路由 REQ_* 消息到具体处理函数。
- * M1 只实现 REQ_UI_READY / REQ_UI_GONE / REQ_GET_STATE；其余返回 "not_implemented"。
  */
 async function handleRequest(message, _sender) {
   switch (message.type) {
@@ -81,7 +97,7 @@ async function handleRequest(message, _sender) {
       return { ok: true };
 
     case MSG.REQ_GET_STATE:
-      // M1 返回空骨架。M4+ 从真实模块聚合。
+      // M2 返回空骨架。M4+ 从真实模块聚合。
       return {
         tracking: {
           isActive: false,
@@ -93,6 +109,16 @@ async function handleRequest(message, _sender) {
         focusTimer: null,
         blacklist: [],
       };
+
+    case MSG.REQ_GET_TABS:
+      return { tabs: tabRegistry.getAll() };
+
+    case MSG.REQ_CLOSE_TAB: {
+      const tabId = message.tabId;
+      if (typeof tabId !== 'number') throw new Error('invalid tabId');
+      await chrome.tabs.remove(tabId);
+      return { closed: tabId };
+    }
 
     default:
       throw new Error(`not_implemented: ${message.type}`);

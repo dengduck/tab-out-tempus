@@ -1,13 +1,23 @@
-/* Tab Out Tempus v2 — 全局样式占位 */
-/* M5+ 再填真正的样式。M1 只放最低限度让空白页能看 */
+/* Tab Out Tempus v2 — M2 样式
+ * 主区域：domainCard 自适应网格；每张卡里 tabChip 竖排。
+ * 设计基调：warm off-white 背景、微拟态卡片、accent orange 高亮。
+ */
 
 :root {
   --bg: #fafaf7;
   --fg: #1a1a1a;
   --muted: #6b6b6b;
+  --muted-2: #999;
   --accent: #e07a3f;
+  --accent-hover: #c8652a;
+  --card-bg: #ffffff;
+  --card-border: #ebe9e3;
+  --chip-hover: #f5f3ee;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06);
   --radius: 12px;
-  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --radius-sm: 8px;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
 * { box-sizing: border-box; }
@@ -17,42 +27,240 @@ body {
   background: var(--bg);
   color: var(--fg);
   font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 #app {
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto;
-  padding: 32px 24px;
+  padding: 32px 24px 64px;
 }
 
 .header .brand {
   margin: 0 0 4px;
   font-size: 28px;
   font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
 .header .status {
   margin: 0;
   color: var(--muted);
-  font-size: 14px;
-}
-
-#main {
-  margin-top: 32px;
-  display: grid;
-  grid-template-columns: 1fr 280px;
-  gap: 24px;
-}
-
-.tabsGrid,
-.sidebar {
-  min-height: 200px;
-  border: 1px dashed #ccc;
-  border-radius: var(--radius);
-  padding: 16px;
-  color: var(--muted);
   font-size: 13px;
 }
 
-.tabsGrid::before { content: "tabsGrid (M2)"; }
-.sidebar::before  { content: "sidebar (M7)"; }
+#main {
+  margin-top: 28px;
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: 24px;
+  align-items: start;
+}
+
+/* ========== tabsGrid ========== */
+
+.tabsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  min-height: 200px;
+}
+
+.tabsGrid__empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 48px 16px;
+  color: var(--muted);
+  font-size: 14px;
+  border: 1px dashed var(--card-border);
+  border-radius: var(--radius);
+}
+
+/* ========== domainCard ========== */
+
+.domainCard {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: box-shadow 0.15s ease;
+}
+
+.domainCard:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.domainCard--homepages {
+  border-color: #f3d9c2;
+  background: linear-gradient(180deg, #fff8f2 0%, #ffffff 30%);
+}
+
+.domainCard__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--card-border);
+  background: #fbfaf7;
+}
+
+.domainCard__favicon {
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.domainCard__icon {
+  font-size: 16px;
+  width: 18px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.domainCard__title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #2a2a2a;
+}
+
+.domainCard__count {
+  color: var(--muted-2);
+  font-weight: 500;
+  margin-left: 2px;
+}
+
+.domainCard__closeAll {
+  background: transparent;
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  font-size: 11px;
+  color: var(--muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  font-family: inherit;
+  transition: all 0.12s ease;
+}
+
+.domainCard__closeAll:hover {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.domainCard__chips {
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+}
+
+/* ========== tabChip ========== */
+
+.tabChip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  transition: background 0.1s ease;
+  min-width: 0;
+}
+
+.tabChip:hover {
+  background: var(--chip-hover);
+}
+
+.tabChip__favicon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  object-fit: contain;
+  border-radius: 2px;
+}
+
+.tabChip__title {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--fg);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.tabChip__title:hover {
+  color: var(--accent);
+}
+
+.tabChip__badge {
+  font-size: 11px;
+  color: var(--muted);
+  background: #f0ede6;
+  padding: 1px 6px;
+  border-radius: 10px;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.tabChip__close {
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  color: var(--muted-2);
+  font-size: 16px;
+  line-height: 1;
+  border-radius: 4px;
+  cursor: pointer;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: all 0.12s ease;
+  font-family: inherit;
+}
+
+.tabChip:hover .tabChip__close {
+  opacity: 1;
+}
+
+.tabChip__close:hover {
+  background: #f3d5c8;
+  color: var(--accent-hover);
+}
+
+/* ========== sidebar（M7 再填实体内容） ========== */
+
+.sidebar {
+  min-height: 200px;
+  border: 1px dashed var(--card-border);
+  border-radius: var(--radius);
+  padding: 24px 16px;
+  color: var(--muted-2);
+  font-size: 12px;
+  text-align: center;
+}
+
+.sidebar::before {
+  content: "Save for Later (M7)";
+}
+
+/* ========== 小屏降级 ========== */
+
+@media (max-width: 900px) {
+  #main {
+    grid-template-columns: 1fr;
+  }
+}
