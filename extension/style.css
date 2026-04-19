@@ -174,12 +174,26 @@ body {
   gap: 8px;
   padding: 6px 8px;
   border-radius: var(--radius-sm);
-  transition: background 0.1s ease;
+  transition: background 0.1s ease, opacity 0.18s ease, transform 0.18s ease, max-height 0.2s ease, padding 0.2s ease, margin 0.2s ease;
   min-width: 0;
+  max-height: 40px;
 }
 
 .tabChip:hover {
   background: var(--chip-hover);
+}
+
+/* M3：关闭时淡出 + 收缩（约 200ms，main.js 里 setTimeout 对齐） */
+.tabChip--leaving {
+  opacity: 0;
+  transform: translateX(24px) scale(0.95);
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+  pointer-events: none;
+  overflow: hidden;
 }
 
 .tabChip__favicon {

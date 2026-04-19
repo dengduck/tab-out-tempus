@@ -8,7 +8,7 @@
  *   2. 并发拉快照（M2 当前只拉 state + tabs；M6+ 加 todayWork / saved）
  *   3. 首次渲染 tabsGrid
  *   4. 订阅 BCAST_TAB_CHANGE 做增量
- *   5. 委托事件：activate / close-tab / close-all
+ *   5. 委托事件：activate / close-tab / close-all（M3 加 swoosh + confetti）
  *   6. beforeunload 通知 SW
  */
 
@@ -16,9 +16,11 @@ import * as messaging from './messaging.js';
 import * as tabsGrid from './views/tabsGrid.js';
 import { LOG_PREFIX } from '../shared/constants.js';
 import { $ } from './utils/dom.js';
+import { playSwoosh } from './utils/audio.js';
+import { burst as confettiBurst } from './utils/confetti.js';
 
 async function main() {
-  console.log(LOG_PREFIX, 'UI main bootstrap (v2.0.0 M2 tabsGrid)');
+  console.log(LOG_PREFIX, 'UI main bootstrap (v2.0.0 M3 close-fx)');
 
   try {
     await messaging.notifyUIReady();
@@ -41,15 +43,13 @@ async function main() {
       messaging.getTabs(),
     ]);
   } catch (err) {
-    if (statusEl) statusEl.textContent = `v2.0.0 · M2 · ⚠️ SW 连接失败：${err?.message || err}`;
+    if (statusEl) statusEl.textContent = `v2.0.0 · M3 · ⚠️ SW 连接失败：${err?.message || err}`;
     console.error(LOG_PREFIX, 'snapshot failed', err);
     return;
   }
 
   const tabs = tabsResp?.tabs || [];
-  if (statusEl) {
-    statusEl.textContent = `v2.0.0 · M2 · ${tabs.length} 个标签页 · 暂停原因 ${state.tracking.pauseReasons.length}`;
-  }
+  updateStatus(statusEl, tabs.length, state.tracking.pauseReasons.length);
 
   // 首次渲染
   tabsGrid.render(gridEl, tabs);
@@ -66,10 +66,10 @@ async function main() {
         console.error(LOG_PREFIX, 'activate failed', err);
       }
     },
-    onCloseTab: async (tabId) => {
+    onCloseTab: async (tabId, event) => {
+      closeWithFx([tabId], { event, pitch: 1 });
       try {
         await messaging.closeTab(tabId);
-        // UI 不主动更新；等 BCAST_TAB_CHANGE removed 来做 diff
       } catch (err) {
         console.error(LOG_PREFIX, 'closeTab failed', err);
       }
@@ -78,6 +78,7 @@ async function main() {
       const ids = tabsGrid.getTabIdsByHostname(hostname);
       if (ids.length === 0) return;
       if (!confirm(`关闭 ${hostname} 下的 ${ids.length} 个标签页？`)) return;
+      closeWithFx(ids, { pitch: 0.7, stagger: 30 });
       try {
         await Promise.all(ids.map((id) => messaging.closeTab(id)));
       } catch (err) {
@@ -88,6 +89,7 @@ async function main() {
       const ids = tabsGrid.getHomepageTabIds();
       if (ids.length === 0) return;
       if (!confirm(`关闭 ${ids.length} 个首页标签？`)) return;
+      closeWithFx(ids, { pitch: 0.7, stagger: 30 });
       try {
         await Promise.all(ids.map((id) => messaging.closeTab(id)));
       } catch (err) {
@@ -101,10 +103,8 @@ async function main() {
     if (!payload) return;
     tabsGrid.applyChange(payload.action, payload.tabInfo);
     // 刷新 header 计数
-    if (statusEl) {
-      const count = document.querySelectorAll('.tabChip').length;
-      statusEl.textContent = `v2.0.0 · M2 · ${count} 个标签页 · 暂停原因 ${state.tracking.pauseReasons.length}`;
-    }
+    const count = document.querySelectorAll('.tabChip:not(.tabChip--leaving)').length;
+    updateStatus(statusEl, count, state.tracking.pauseReasons.length);
   });
 
   // 离开通知
@@ -112,7 +112,41 @@ async function main() {
     messaging.notifyUIGone().catch(() => { /* best-effort */ });
   });
 
-  console.log(LOG_PREFIX, 'M2 ready,', tabs.length, 'tabs rendered');
+  console.log(LOG_PREFIX, 'M3 ready,', tabs.length, 'tabs rendered');
+}
+
+/**
+ * 带动画地关闭一批 tab：swoosh + 每个 chip 位置 confetti + chip 淡出。
+ * 实际的 chrome.tabs.remove 由调用方处理（我们这里只管视觉）。
+ * @param {number[]} tabIds
+ * @param {{event?: MouseEvent, pitch?: number, stagger?: number}} opts
+ */
+function closeWithFx(tabIds, opts = {}) {
+  const pitch = opts.pitch ?? 1;
+  const stagger = opts.stagger ?? 0;
+
+  // swoosh 一次就够（批量不叠加音，耳朵会炸）
+  playSwoosh({ pitch });
+
+  tabIds.forEach((id, idx) => {
+    const fire = () => {
+      const center = tabsGrid.getChipCenter(id);
+      if (center) {
+        confettiBurst(center.x, center.y, { count: tabIds.length > 1 ? 18 : 28 });
+      }
+      tabsGrid.animateRemoveChip(id);
+    };
+    if (stagger > 0 && idx > 0) {
+      setTimeout(fire, idx * stagger);
+    } else {
+      fire();
+    }
+  });
+}
+
+function updateStatus(el, tabCount, pauseCount) {
+  if (!el) return;
+  el.textContent = `v2.0.0 · M3 · ${tabCount} 个标签页 · 暂停原因 ${pauseCount}`;
 }
 
 main();

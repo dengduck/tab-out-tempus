@@ -143,6 +143,46 @@ export function getHomepageTabIds() {
     .map((t) => t.id);
 }
 
+/**
+ * 本地视觉移除 chip：加 leaving class → 180ms 后从 DOM 抽走 + 清空卡。
+ * 后端 BCAST_TAB_CHANGE 'removed' 回流时 chip 已不存在，`removeChipForTab`
+ * 里的 `if (!chip) return` 兜底，不会冲突。
+ * @param {number} tabId
+ */
+export function animateRemoveChip(tabId) {
+  if (!rootEl) return;
+  const chip = rootEl.querySelector(`.tabChip[data-tab-id="${tabId}"]`);
+  if (!chip) return;
+  chip.classList.add('tabChip--leaving');
+  currentTabs.delete(tabId);
+  setTimeout(() => {
+    const card = chip.closest('.domainCard');
+    chip.remove();
+    if (card) {
+      const remaining = card.querySelectorAll('.tabChip').length;
+      if (remaining === 0) {
+        card.remove();
+        maybeShowEmptyState();
+      } else {
+        updateCardCount(card);
+      }
+    }
+  }, 200);
+}
+
+/**
+ * 查询 chip 在视口中的坐标（用于 confetti burst）。
+ * @param {number} tabId
+ * @returns {{x:number, y:number}|null}
+ */
+export function getChipCenter(tabId) {
+  if (!rootEl) return null;
+  const chip = rootEl.querySelector(`.tabChip[data-tab-id="${tabId}"]`);
+  if (!chip) return null;
+  const r = chip.getBoundingClientRect();
+  return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+}
+
 // ========== 内部 helper ==========
 
 function bucketKeyFor(tabInfo) {
