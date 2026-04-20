@@ -19,6 +19,7 @@ import * as messaging from './messaging.js';
 import * as tabsGrid from './views/tabsGrid.js';
 import * as header from './views/header.js';
 import * as historyView from './views/historyView.js';
+import * as sidebar from './views/sidebar.js';
 import { LOG_PREFIX } from '../shared/constants.js';
 import { $ } from './utils/dom.js';
 import { playSwoosh } from './utils/audio.js';
@@ -42,18 +43,19 @@ async function main() {
   }
 
   // 并发快照（D11 一次性拉齐首帧需要的所有数据，之后都走增量）
-  let state, tabsResp, todayResp, timesResp;
+  let state, tabsResp, todayResp, timesResp, savedResp;
   try {
-    [state, tabsResp, todayResp, timesResp] = await Promise.all([
+    [state, tabsResp, todayResp, timesResp, savedResp] = await Promise.all([
       messaging.getState(),
       messaging.getTabs(),
       messaging.getTodayWork(),
       messaging.getTabTimes(),  // 全量（不传 tabIds）
+      messaging.getSaved(),     // M7: saved for later
     ]);
   } catch (err) {
     header.updateStatus(0, []);
     const statusEl = $('.header .status');
-    if (statusEl) statusEl.textContent = `v2.0.0 · M6 · ⚠️ SW 连接失败：${err?.message || err}`;
+    if (statusEl) statusEl.textContent = `v2.0.0 · M7 · ⚠️ SW 连接失败：${err?.message || err}`;
     console.error(LOG_PREFIX, 'snapshot failed', err);
     return;
   }
@@ -77,6 +79,10 @@ async function main() {
 
   // M6: 初始化历史统计面板（默认收起，点 📊 展开）
   historyView.init();
+
+  // M7: 初始化 Save for Later 侧边栏
+  const sidebarEl = $('#sidebar');
+  sidebar.render(sidebarEl, savedResp?.saved || []);
 
   // 事件委托
   tabsGrid.bindEvents(gridEl, {
@@ -118,6 +124,14 @@ async function main() {
         await Promise.all(ids.map((id) => messaging.closeTab(id)));
       } catch (err) {
         console.error(LOG_PREFIX, 'closeHomepages failed', err);
+      }
+    },
+    onSaveForLater: async (tabId) => {
+      try {
+        const resp = await messaging.saveForLater(tabId);
+        if (resp?.entry) sidebar.add(resp.entry);
+      } catch (err) {
+        console.error(LOG_PREFIX, 'saveForLater failed', err);
       }
     },
   });

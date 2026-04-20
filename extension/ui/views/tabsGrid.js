@@ -102,9 +102,9 @@ export function applyChange(action, tabInfo) {
 }
 
 /**
- * 事件委托：activate-tab / close-tab / close-all / close-homepages。
+ * 事件委托：activate-tab / close-tab / close-all / close-homepages / save-for-later。
  * @param {HTMLElement} root
- * @param {{onActivate: fn, onCloseTab: fn, onCloseAll: fn, onCloseHomepages: fn}} handlers
+ * @param {{onActivate: fn, onCloseTab: fn, onCloseAll: fn, onCloseHomepages: fn, onSaveForLater?: fn}} handlers
  */
 export function bindEvents(root, handlers) {
   root.addEventListener('click', (e) => {
@@ -126,6 +126,9 @@ export function bindEvents(root, handlers) {
       handlers.onCloseAll?.(host);
     } else if (action === 'close-homepages') {
       handlers.onCloseHomepages?.();
+    } else if (action === 'save-for-later') {
+      const id = Number(target.getAttribute('data-tab-id'));
+      handlers.onSaveForLater?.(id);
     }
   });
 }

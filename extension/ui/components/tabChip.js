@@ -46,6 +46,14 @@ export function create(tabInfo) {
 
   const badge = h('span', { class: 'tabChip__badge', hidden: '' });
 
+  const saveBtn = h('button', {
+    class: 'tabChip__save',
+    'data-action': 'save-for-later',
+    'data-tab-id': String(tabInfo.id),
+    'aria-label': '稍后查看',
+    title: '稍后查看',
+  }, ['🔖']);
+
   const closeBtn = h('button', {
     class: 'tabChip__close',
     'data-action': 'close-tab',
@@ -57,7 +65,7 @@ export function create(tabInfo) {
   const chip = h('div', {
     class: 'tabChip',
     'data-tab-id': String(tabInfo.id),
-  }, [favicon, title, badge, closeBtn]);
+  }, [favicon, title, badge, saveBtn, closeBtn]);
 
   return chip;
 }

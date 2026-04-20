@@ -12,7 +12,7 @@
  */
 
 import { MSG, classify } from '../shared/messages.js';
-import { LOG_PREFIX, TICK_INTERVAL_MS } from '../shared/constants.js';
+import { LOG_PREFIX, TICK_INTERVAL_MS, STORAGE_KEY } from '../shared/constants.js';
 import { getHostname } from '../shared/hostname.js';
 import * as tabRegistry from './tabRegistry.js';
 import * as timeTracker from './timeTracker.js';
@@ -20,6 +20,7 @@ import * as focusModel from './focusModel.js';
 import * as idleGuard from './idleGuard.js';
 import * as alarms from './alarms.js';
 import { getRange } from './timeLog.js';
+import { localGet, localSet } from './store.js';
 
 // ========== UI 连接状态 ==========
 
@@ -206,6 +207,40 @@ async function handleRequest(message, _sender) {
       if (typeof start !== 'number' || typeof end !== 'number') throw new Error('invalid range');
       const slices = await getRange(start, end);
       return { slices };
+    }
+
+    // ===== M7: Save for Later =====
+
+    case MSG.REQ_SAVE_FOR_LATER: {
+      const tabId = message.tabId;
+      if (typeof tabId !== 'number') throw new Error('invalid tabId');
+      const tab = tabRegistry.get(tabId);
+      if (!tab) throw new Error('tab not found');
+      const entry = {
+        id: `${Date.now()}-${tabId}`,
+        url: tab.url,
+        title: tab.title || tab.url || '',
+        favIconUrl: tab.favIconUrl || '',
+        savedAt: Date.now(),
+      };
+      const saved = (await localGet(STORAGE_KEY.SAVED)) || [];
+      saved.push(entry);
+      await localSet(STORAGE_KEY.SAVED, saved);
+      return { entry };
+    }
+
+    case MSG.REQ_GET_SAVED: {
+      const saved = (await localGet(STORAGE_KEY.SAVED)) || [];
+      return { saved };
+    }
+
+    case MSG.REQ_REMOVE_SAVED: {
+      const entryId = message.id;
+      if (!entryId) throw new Error('invalid id');
+      const saved = (await localGet(STORAGE_KEY.SAVED)) || [];
+      const filtered = saved.filter((e) => e.id !== entryId);
+      await localSet(STORAGE_KEY.SAVED, filtered);
+      return { removed: entryId };
     }
 
     default:
