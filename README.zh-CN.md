@@ -107,6 +107,19 @@ git clone https://github.com/dengduck/tab-out-tempus.git
 
 ---
 
+## 致谢
+
+特别感谢 **[web-activity-time-tracker](https://github.com/brave-tools/web-activity-time-tracker)** —— 一个优秀的开源 Chrome 网页活动时间追踪扩展。Tab Out Tempus 与它**不共享任何代码**（技术栈完全不同：对方用 Vue/TypeScript，我们用原生 ES Module），但通过研究它的架构我们获得了宝贵的设计启发：
+
+- `chrome.idle` API 的正确用法 + 对播放中音视频的豁免思路
+- 限时 block 的极简实现路径（通过 `chrome.tabs.update` 跳转到本地 block 页面，零额外权限）
+- 启发了我们的差异化方向 —— 对方做的是单域名限时，我们在此基础上延伸出**基于分类的组限额**（例如"娱乐"分类下多个网站共享一个每日预算）
+- 通过对照其架构，帮助我们锁定了**单一时间账本**模型（见 `docs/DECISIONS-v2.md` D17）
+
+感谢该项目坚持开源，让这种相互学习成为可能。
+
+---
+
 ## 许可证
 
 MIT 许可证。由 [Zara](https://x.com/zarazhangrui) 创建。[dengduck](https://github.com/dengduck/tab-out-tempus) 扩展 fork 为 **Tab Out Tempus**。

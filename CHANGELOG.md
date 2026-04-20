@@ -4,6 +4,15 @@ All notable changes to **Tab Out Tempus** (our fork with custom features) are do
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [2.0.0] — Unreleased (in progress on `rewrite-v2` branch)
+
+Complete rewrite with modular architecture. See `docs/REWRITE-PLAN-v2.md` and `docs/DECISIONS-v2.md` for details.
+
+### Acknowledgments
+- Design insights (especially around `chrome.idle` usage, per-domain time limits, and the single time ledger architecture) were inspired by [**web-activity-time-tracker**](https://github.com/brave-tools/web-activity-time-tracker). No code was copied — we reimplemented everything in vanilla ES Modules — but cross-referencing their architecture was invaluable. See `docs/DECISIONS-v2.md` D23 for details.
+
+---
+
 ## [1.3.0] — 2026-04-19
 
 ### Changed

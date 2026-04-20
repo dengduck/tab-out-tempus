@@ -12,7 +12,16 @@
 - ✅ chrome.idle API 纳入 M4 TimeTracker（60s 无键鼠暂停）
 - ✅ **M0 架构冻结完成**（2026-04-20）：ARCHITECTURE-v2.md §3 所有接口签名、§5 消息协议、§6 存储 schema、§8 UI 初始化流程、§9.2 测试用例清单全部敲定；新增决策 D9 (pauseReasons Set) / D10 (混合消息模式) / D11 (UI 订阅式增量)
 - ✅ **M1 骨架搭建完成**（2026-04-20）：清空 v1 代码；按 ARCHITECTURE-v2 §2 建 background/ ui/ shared/ tests/ 共 27 个源文件；manifest v2.0.0（SW type:module，新增 alarms/idle 权限）；最小 sw.js + ui/main.js 打通 UI↔SW 通信链路（REQ_UI_READY / REQ_GET_STATE）；所有业务模块占位带 JSDoc 接口契约和目标 M 里程碑标注；新增决策 D12（confetti/swoosh 保持纯 JS 路线，不引入 assets/）
-- ⏭️ 下一步：load unpacked 验证 new tab page 能打开 + SW 连接成功；然后进 M2（tab 分组渲染）
+- ✅ **M2-M5 完成**（2026-04-20，HEAD `52e7d1c`）：tab 分组、close FX、TimeTracker（15/15 测试）、时间 UI（37/37 测试）全部跑通真机验收；追加决策 D13-D16
+- ⚠️ **M5 后复盘发现架构冗余**（2026-04-20 深夜）：拉对手 `web-activity-time-tracker` 对照研究 + 切 tab 数字回退 Bug 诊断后，锁定**单一时间账本**模型为长远最优。追加决策 **D17-D23**（详见 DECISIONS-v2.md 补丁 #001/#002）：
+  - D17 时间模型收敛为单一时间账本，废止 `tabCumulativeMs` + D7.1/D7.2/D15/D16
+  - D18 不计时域名（Excluded Domains）= **永久域名级黑名单**（无论 Private Mode 开关状态，列表内域名永远不计时）
+  - D19 域名分类标签化（预置 6 类 + 用户维护，v2.1）
+  - D20 chrome.idle 阈值用户可选，默认 3 分钟（覆盖 D4 的 60s）
+  - D21 限时 block 机制（v2.1）
+  - D22 Private Mode = **全局临时关闸**（开启后限定时长内所有域名都不计时），与 D18 正交
+  - D23 致谢参考项目 `web-activity-time-tracker`（README / CHANGELOG / GitHub About 都加）
+- ⏭️ 下一步：**M4.5 架构收敛**（把双账本收敛为单一 timeLog 账本 + audible 豁免 + idle 阈值可选），UI 层 API 不变无感；完成后进 M6 历史统计
 
 ---
 
@@ -89,12 +98,15 @@ git push origin v1.3.5-legacy
 
 **个人常用：**
 - [ ] Focus Timer（番茄钟/自定义时长）
-- [ ] 隐私黑名单（指定域名不记录时长）
-- [ ] **Private Mode（隐私计时窗口，从 v1 移植）** — 启动后指定时长内暂停所有追踪，见 `v1-feature-reference/private-mode.md`
-- [ ] **chrome.idle 集成** — 键鼠空闲 60s 自动暂停计时（接入 TimeTracker）
+- [ ] **不计时域名（D18）** — 永久域名黑名单：列表内域名**任何时候**都不计时（与 Private Mode 正交）
+- [ ] **Private Mode（D22，从 v1 移植）** — 全局临时关闸：开启后指定时长内**所有域名**都不计时，时长到期自动关闭
+- [ ] **chrome.idle 集成（D20 用户可选阈值，默认 3 分钟）** — 键鼠空闲超阈值自动暂停；audible 豁免（看视频不误暂停）
 
 ### 🔜 v2.1 再加
 
+- [ ] **限时 block**（到达域名/分类每日限额时跳转 block 页面，D21）
+- [ ] **到时通知**（chrome.notifications 提醒）
+- [ ] **域名分类标签化 + 组限额**（预置 6 类 + 可维护，D19）
 - [ ] 生产力 Banner
 - [ ] Tab 休眠 / 唤醒（Chrome Discard API）
 - [ ] 历史数据导入 / 导出
@@ -123,25 +135,31 @@ git push origin v1.3.5-legacy
 | **M3: 关闭 + 重复检测 + confetti** | 1 晚 | 关闭交互回来（含音效动画） |
 | **M4: TimeTracker 模块（核心难点）** | 2-3 晚 | 独立 `timeTracker.js` + 单元测试文件；能准确维护 tabCumulativeMs 单调计数器；多窗口 focus 模型内置；**chrome.idle 集成（60s 无键鼠 → pauseByIdle）**；守门函数统一拦截 Private Mode / Focus Timer / 黑名单 |
 | **M5: 时间 UI 接入** | 1-2 晚 | Header "今日工作"、chip badge、域名卡时长 |
-| **M6: 历史统计 + 热力图** | 2 晚 | Today/Week/Month/Year + 24h 热力图 |
+| **🆕 M4.5: 架构收敛（单一时间账本）** | 1-2 晚 | 依据 D17，删除 `tabCumulativeMs` Map；`getTodayTotalMs` / `getTabCumulativeMs` / 新增 `getDomainTodayMs` / `getHourlyBuckets` 全改为从 timeLog 纯函数现算；audible 豁免；D20 idle 阈值用户可选；`tests/timeLedger.test.js`（含 Bug 1 回归用例 + SW 重启无损断言）；UI 层 API 不变，M5 回归通过 |
+| **M6: 历史统计 + 热力图** | 2 晚 | Today/Week/Month/Year + 24h 热力图（在干净账本基座上一次写对） |
 | **M7: Save for Later** | 1 晚 | 侧边栏 + chrome.storage.local 持久化 |
-| **M8: Focus Timer + 黑名单 + Private Mode** | 1-2 晚 | 三个"临时改变追踪行为"的功能复用同一套状态模型 |
+| **M8: Focus Timer + 不计时域名 + Private Mode** | 1-2 晚 | 三个功能共享 `pauseReasons` Set 架构但语义正交：Focus Timer = 时段级主动白名单，不计时域名（D18）= 域名级永久黑名单，Private Mode（D22）= 时段级全局关闸 |
 | **M9: 打磨 + README** | 1 晚 | 改 README、CHANGELOG、版本号 2.0.0 |
 
-**合计：约 11-15 个工作晚，折合 3-4 周（含周末）。**
+**合计：约 12-17 个工作晚**（M4.5 追加后 +1~2 晚），折合 3-4 周（含周末）。
+
+**⚠️ 当前位置**：M5 完成（commit `52e7d1c`，回滚锚点）；下一步 **M4.5**。M4.5 commit 出问题可一键 reset 回 `52e7d1c`，UI 层代码不受影响。
 
 ---
 
 ## 5. 关键工程原则（写进 v2 代码注释）
 
+> ⚠️ 本节原文（P2/P3 关于 `tabCumulativeMs` 的约束）已随 D17 废止。以下是 M4.5 收敛后的新版本。
+
 1. **单向数据流**：storage / SW 是真相源 → 前端只渲染，不回写业务状态。
-2. **TimeTracker 是唯一改 tabCumulativeMs 的地方**——其它模块只读。
-3. **单调性不可破**：`cumulativeMs` 只能 `+=`，永远不会减少或被覆盖。
-4. **每个模块一个 `.js` 文件**，对外只暴露 named exports，不要全局变量。
-5. **模块之间只通过接口通信**，禁止跨模块直接读写对方的内部状态。
-6. **写在前面的 3 个约定（v1 踩过的坑）：**
+2. **timeLog 是唯一事实源**——所有时长聚合都从 timeLog 纯函数现算，禁止在内存里维护冗余的聚合字段（这是 D17 废止双账本的核心铁律）。
+3. **timeLog append-only**——不修改、不删除历史 slice；当前 slice 关闭时 append 一条，永远不回写。
+4. **唯一可变状态 = `currentSlice`**（TimeTracker 模块内）+ `pauseReasons: Set`；其它一切皆 immutable。
+5. **每个模块一个 `.js` 文件**，对外只暴露 named exports，不要全局变量。
+6. **模块之间只通过接口通信**，禁止跨模块直接读写对方的内部状态。
+7. **写在前面的 3 个约定（v1 踩过的坑）：**
    - `chrome.windows.onFocusChanged` 是焦点的唯一真相源
-   - `chrome.alarms`（最小 30s）做周期存盘，不要用 `setInterval`
+   - `chrome.alarms`（最小 30s）做周期存盘 + 长 slice 强制 finalize，不要用 `setInterval`
    - `chrome.storage.session` 不跨 SW 重启，真相要写 `.local`
 
 ---

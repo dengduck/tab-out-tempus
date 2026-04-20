@@ -107,6 +107,19 @@ Everything runs inside the Chrome extension. No external server, no API calls, n
 
 ---
 
+## Acknowledgments
+
+Special thanks to **[web-activity-time-tracker](https://github.com/brave-tools/web-activity-time-tracker)** — an excellent open-source Chrome extension for web activity time tracking. While Tab Out Tempus shares **no code** with it (different stacks: they use Vue/TypeScript, we use vanilla ES Modules), studying its architecture gave us valuable design insights:
+
+- Correct usage patterns for `chrome.idle` API with audible-media exceptions
+- A minimal implementation path for per-domain time limits (via `chrome.tabs.update` to a local block page, zero extra permissions)
+- Inspired our differentiation direction — while they implement per-domain limits, we extend this to **category-based group budgets** (e.g. a unified daily budget for "entertainment" covering multiple sites)
+- Cross-referencing their architecture helped us lock in our **single time ledger model** (see `docs/DECISIONS-v2.md` D17)
+
+We're grateful for the project being open-source, which made this kind of cross-learning possible.
+
+---
+
 ## License
 
 MIT License. Built by [Zara](https://x.com/zarazhangrui). Extended fork by [dengduck](https://github.com/dengduck/tab-out-tempus) as **Tab Out Tempus**.
