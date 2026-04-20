@@ -50,6 +50,7 @@ export function getTabs()            { return request(MSG.REQ_GET_TABS); }
 export function closeTab(tabId)      { return request(MSG.REQ_CLOSE_TAB, { tabId }); }
 export function getTodayWork()       { return request(MSG.REQ_GET_TODAY_WORK); }
 export function getTabTime(tabId)    { return request(MSG.REQ_GET_TAB_TIME, { tabId }); }
+export function getTabTimes(tabIds)  { return request(MSG.REQ_GET_TAB_TIMES, { tabIds }); }
 export function getHistoryRange(start, end) {
   return request(MSG.REQ_GET_HISTORY, { start, end });
 }

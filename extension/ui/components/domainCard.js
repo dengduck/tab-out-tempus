@@ -18,6 +18,7 @@
 
 import { h } from '../utils/dom.js';
 import { create as createChip } from './tabChip.js';
+import { formatDurationCompact } from '../utils/formatDuration.js';
 
 /**
  * @param {string} hostname
@@ -39,6 +40,7 @@ export function create(hostname, tabs) {
       hostname,
       h('span', { class: 'domainCard__count' }, [` (${tabs.length})`]),
     ]),
+    h('span', { class: 'domainCard__time', hidden: '' }),
     h('button', {
       class: 'domainCard__closeAll',
       'data-action': 'close-all',
@@ -50,6 +52,24 @@ export function create(hostname, tabs) {
     class: 'domainCard',
     'data-hostname': hostname,
   }, [head, chipsWrap]);
+}
+
+/**
+ * 更新域名卡上的聚合时长。
+ * @param {HTMLElement} cardEl .domainCard 根
+ * @param {number} ms 该域名所有 open tab 的累计总毫秒
+ */
+export function updateTime(cardEl, ms) {
+  if (!cardEl) return;
+  const timeEl = cardEl.querySelector('.domainCard__time');
+  if (!timeEl) return;
+  if (typeof ms !== 'number' || !Number.isFinite(ms) || ms < 60000) {
+    if (!timeEl.hidden) timeEl.hidden = true;
+    return;
+  }
+  const text = formatDurationCompact(ms);
+  if (timeEl.hidden) timeEl.hidden = false;
+  if (timeEl.textContent !== text) timeEl.textContent = text;
 }
 
 function faviconFallback() {

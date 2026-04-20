@@ -176,6 +176,25 @@ async function handleRequest(message, _sender) {
       return { cumulativeMs, isActive: state.activeTabId === tabId };
     }
 
+    case MSG.REQ_GET_TAB_TIMES: {
+      // 批量：允许 tabIds 省略（= 全部已知 tab）
+      const ids = Array.isArray(message.tabIds) ? message.tabIds : null;
+      const state = timeTracker.getTrackingState();
+      const result = {};
+      if (ids) {
+        for (const id of ids) {
+          if (typeof id !== 'number') continue;
+          result[id] = timeTracker.getTabCumulativeMs(id);
+        }
+      } else {
+        // 全量：遍历 tabRegistry
+        for (const t of tabRegistry.getAll()) {
+          result[t.id] = timeTracker.getTabCumulativeMs(t.id);
+        }
+      }
+      return { tabTimes: result, activeTabId: state.activeTabId };
+    }
+
     case MSG.REQ_GET_TODAY_WORK: {
       const totalMs = await timeTracker.getTodayTotalMs();
       // breakdown 留给 historyView 请求自己拿；这里返回总数即可

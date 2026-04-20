@@ -37,6 +37,16 @@ body {
   padding: 32px 24px 64px;
 }
 
+.header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.header__left { min-width: 0; }
+.header__right { flex-shrink: 0; }
+
 .header .brand {
   margin: 0 0 4px;
   font-size: 28px;
@@ -48,6 +58,53 @@ body {
   margin: 0;
   color: var(--muted);
   font-size: 13px;
+}
+
+/* ========== 今日工作（M5） ========== */
+
+.todayWork {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.todayWork__label {
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+
+.todayWork__value {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--fg);
+  min-width: 80px;
+  text-align: right;
+}
+
+.todayWork__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #c0c0c0;                 /* 默认：暂停色 */
+  box-shadow: 0 0 0 0 rgba(224, 122, 63, 0);
+  transition: background 0.2s ease;
+}
+
+.todayWork__dot.is-active {
+  background: var(--accent);
+  animation: todayWorkPulse 1.8s ease-in-out infinite;
+}
+
+@keyframes todayWorkPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(224, 122, 63, 0.4); }
+  50%      { box-shadow: 0 0 0 6px rgba(224, 122, 63, 0); }
 }
 
 #main {
@@ -141,6 +198,20 @@ body {
   margin-left: 2px;
 }
 
+.domainCard__time {
+  margin-left: 8px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  background: #f5f2eb;
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.domainCard__time[hidden] { display: none; }
+
 .domainCard__closeAll {
   background: transparent;
   border: 1px solid var(--card-border);
@@ -230,6 +301,14 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+.tabChip__badge.is-active {
+  color: var(--accent);
+  background: #fbead9;
+  font-weight: 500;
+}
+
+.tabChip__badge[hidden] { display: none; }
+
 .tabChip__close {
   width: 22px;
   height: 22px;
@@ -276,5 +355,10 @@ body {
 @media (max-width: 900px) {
   #main {
     grid-template-columns: 1fr;
+  }
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
   }
 }

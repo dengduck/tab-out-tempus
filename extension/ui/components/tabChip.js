@@ -19,6 +19,7 @@
  */
 
 import { h } from '../utils/dom.js';
+import { formatDurationCompact } from '../utils/formatDuration.js';
 
 /**
  * @param {{id:number,url:string,title:string,favIconUrl?:string,windowId:number}} tabInfo
@@ -61,17 +62,26 @@ export function create(tabInfo) {
   return chip;
 }
 
-/** M5 填：更新 tab 时长 badge */
-export function updateBadge(el, ms) {
+/**
+ * 更新 tab 时长 badge。
+ *   - ms < 60000（不足 1 分钟）→ 隐藏 badge（避免秒跳）
+ *   - isActive=true → 加 is-active 类（橙色 + 加粗）
+ * @param {HTMLElement} el tabChip 根元素
+ * @param {number} ms tab 累计毫秒（cumulative + 若是当前活跃 tab 再加 running）
+ * @param {boolean} [isActive=false]
+ */
+export function updateBadge(el, ms, isActive = false) {
   if (!el) return;
   const badge = el.querySelector('.tabChip__badge');
   if (!badge) return;
-  if (typeof ms !== 'number' || ms < 1000) {
-    badge.hidden = true;
+  if (typeof ms !== 'number' || !Number.isFinite(ms) || ms < 60000) {
+    if (!badge.hidden) badge.hidden = true;
     return;
   }
-  badge.hidden = false;
-  badge.textContent = `${Math.floor(ms / 60000)}m`;
+  const text = formatDurationCompact(ms);
+  if (badge.hidden) badge.hidden = false;
+  if (badge.textContent !== text) badge.textContent = text;
+  badge.classList.toggle('is-active', !!isActive);
 }
 
 function defaultFaviconFor(url) {

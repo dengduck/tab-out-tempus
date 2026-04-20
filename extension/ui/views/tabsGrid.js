@@ -21,8 +21,8 @@
 
 import { h } from '../utils/dom.js';
 import { getHostname, isHomepage, groupByDomain } from '../utils/domain.js';
-import { create as createCard } from '../components/domainCard.js';
-import { create as createChip } from '../components/tabChip.js';
+import { create as createCard, updateTime as updateCardTime } from '../components/domainCard.js';
+import { create as createChip, updateBadge as updateChipBadge } from '../components/tabChip.js';
 import { render as renderHomepages } from './homepagesGroup.js';
 
 /** @type {HTMLElement|null} */
@@ -273,4 +273,53 @@ function maybeShowEmptyState() {
 // 属性选择器双引号内只需转义反斜杠和双引号
 function attrEscape(s) {
   return String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+// ========== M5：时间快照刷新 ==========
+
+/**
+ * 批量更新所有 chip badge + 域名卡聚合时长。
+ * @param {{tabTimes: Record<number, number>, activeTabId: number|null}} snapshot
+ *   tabTimes: {tabId: cumulativeMs(含 running)}
+ *   activeTabId: 当前正在计时的 tab（用来给 chip 加 is-active 高亮）
+ *
+ * 为什么把"探 DOM"收在这里不让 main.js 做：
+ *   main.js 应该只管 "数据流 + 事件"，tabsGrid 是"DOM 真相源"。这符合 M0
+ *   的 D11（UI 层 DOM 查询不跨模块）。
+ */
+export function applyTimeSnapshot(snapshot) {
+  if (!rootEl || !snapshot || typeof snapshot !== 'object') return;
+  const { tabTimes = {}, activeTabId = null } = snapshot;
+
+  // 1. chip 级
+  const chips = rootEl.querySelectorAll('.tabChip');
+  chips.forEach((chip) => {
+    const id = Number(chip.getAttribute('data-tab-id'));
+    if (!Number.isFinite(id)) return;
+    const ms = tabTimes[id] || 0;
+    updateChipBadge(chip, ms, id === activeTabId);
+  });
+
+  // 2. 域名卡聚合：遍历 currentTabs 按 hostname 汇总
+  const byHost = new Map();  // hostname -> sum
+  for (const [id, info] of currentTabs) {
+    if (isHomepage(info.url)) continue;  // homepages 卡不显示时长（M5 版）
+    const host = getHostname(info.url);
+    if (!host) continue;
+    const ms = tabTimes[id] || 0;
+    byHost.set(host, (byHost.get(host) || 0) + ms);
+  }
+
+  const cards = rootEl.querySelectorAll('.domainCard:not(.domainCard--homepages)');
+  cards.forEach((card) => {
+    const host = card.getAttribute('data-hostname');
+    if (!host) return;
+    const total = byHost.get(host) || 0;
+    updateCardTime(card, total);
+  });
+}
+
+/** 给 main.js 查询当前所有 open tabId（用来批量请求 SW 的时间快照） */
+export function getAllTabIds() {
+  return Array.from(currentTabs.keys());
 }

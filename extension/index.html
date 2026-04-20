@@ -8,8 +8,17 @@
 <body>
   <div id="app">
     <header id="header" class="header">
-      <h1 class="brand">Tab Out Tempus</h1>
-      <p class="status">v2.0.0 · M1 骨架阶段 · 功能尚未实现</p>
+      <div class="header__left">
+        <h1 class="brand">Tab Out Tempus</h1>
+        <p class="status">v2.0.0 · 启动中…</p>
+      </div>
+      <div class="header__right">
+        <div class="todayWork" id="todayWork" hidden>
+          <span class="todayWork__label">今日工作</span>
+          <span class="todayWork__value" id="todayWorkValue">--</span>
+          <span class="todayWork__dot" id="todayWorkDot" aria-hidden="true"></span>
+        </div>
+      </div>
     </header>
     <main id="main">
       <section id="tabsGrid" class="tabsGrid"></section>
