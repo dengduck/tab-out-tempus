@@ -20,6 +20,7 @@ import * as tabsGrid from './views/tabsGrid.js';
 import * as header from './views/header.js';
 import * as historyView from './views/historyView.js';
 import * as sidebar from './views/sidebar.js';
+import * as settingsPanel from './views/settingsPanel.js';
 import { LOG_PREFIX } from '../shared/constants.js';
 import { $ } from './utils/dom.js';
 import { playSwoosh } from './utils/audio.js';
@@ -28,7 +29,7 @@ import { burst as confettiBurst } from './utils/confetti.js';
 let lastState = null;  // 缓存 global state，更新 status 行用
 
 async function main() {
-  console.log(LOG_PREFIX, 'UI main bootstrap (v2.0.0 M8)');
+  console.log(LOG_PREFIX, 'UI main bootstrap (v2.0.0 M9)');
 
   try {
     await messaging.notifyUIReady();
@@ -55,7 +56,7 @@ async function main() {
   } catch (err) {
     header.updateStatus(0, []);
     const statusEl = $('.header .status');
-    if (statusEl) statusEl.textContent = `v2.0.0 · M8 · ⚠️ SW 连接失败：${err?.message || err}`;
+    if (statusEl) statusEl.textContent = `v2.0.0 · M9 · ⚠️ SW 连接失败：${err?.message || err}`;
     console.error(LOG_PREFIX, 'snapshot failed', err);
     return;
   }
@@ -83,6 +84,13 @@ async function main() {
   // M7: 初始化 Save for Later 侧边栏
   const sidebarEl = $('#sidebar');
   sidebar.render(sidebarEl, savedResp?.saved || []);
+
+  // M9: 初始化设置面板
+  settingsPanel.init({
+    privateMode: state.privateMode ?? null,
+    focusTimer: state.focusTimer ?? null,
+    blacklist: state.blacklist ?? [],
+  });
 
   // 事件委托
   tabsGrid.bindEvents(gridEl, {
@@ -188,6 +196,8 @@ async function main() {
     });
     const count = document.querySelectorAll('.tabChip:not(.tabChip--leaving)').length;
     header.updateStatus(count, payload.pauseReasons || []);
+    // M9: 同步设置面板状态
+    settingsPanel.updateState(payload);
   });
 
   // ========== 离开通知 ==========
@@ -195,7 +205,7 @@ async function main() {
     messaging.notifyUIGone().catch(() => { /* best-effort */ });
   });
 
-  console.log(LOG_PREFIX, 'M8 ready,', tabs.length, 'tabs, todayMs =', todayResp?.totalMs);
+  console.log(LOG_PREFIX, 'M9 ready,', tabs.length, 'tabs, todayMs =', todayResp?.totalMs);
 }
 
 /**

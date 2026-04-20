@@ -77,7 +77,7 @@ async function bootstrap() {
   bootstrapPromise = (async () => {
     if (bootstrapped) return;
     bootstrapped = true;
-    console.log(LOG_PREFIX, 'SW bootstrap v2.0.0 M8');
+    console.log(LOG_PREFIX, 'SW bootstrap v2.0.0');
 
     // 1. tabRegistry（需要先有它，timeTracker 靠它查 hostname）
     await tabRegistry.init({ emit: broadcast });

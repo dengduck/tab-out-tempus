@@ -45,7 +45,12 @@ body {
 }
 
 .header__left { min-width: 0; }
-.header__right { flex-shrink: 0; }
+.header__right {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
 
 .header .brand {
   margin: 0 0 4px;
@@ -105,6 +110,30 @@ body {
 @keyframes todayWorkPulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(224, 122, 63, 0.4); }
   50%      { box-shadow: 0 0 0 6px rgba(224, 122, 63, 0); }
+}
+
+/* ========== 设置按钮 (M9) ========== */
+
+.settingsToggle {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  line-height: 1;
+}
+
+.settingsToggle:hover {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-sm);
+}
+
+.settingsToggle.is-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(224, 122, 63, 0.15);
 }
 
 /* ========== 历史统计按钮 (M6) ========== */
@@ -716,6 +745,212 @@ body {
 .tabChip__save:hover {
   opacity: 1 !important;
   background: #e8f0f8;
+}
+
+/* ========== Settings Panel (M9) ========== */
+
+.settingsPanel {
+  margin-top: 20px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  padding: 20px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 20px;
+}
+
+.settingsPanel[hidden] { display: none; }
+
+.sp__section {
+  padding: 16px;
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+}
+
+.sp__sectionHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.sp__sectionIcon { font-size: 18px; }
+
+.sp__sectionTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.sp__desc {
+  margin: 0 0 12px;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.sp__actionRow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.sp__statusRow {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.sp__select {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  background: var(--card-bg);
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.sp__input {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  background: var(--card-bg);
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--fg);
+}
+
+.sp__input::placeholder { color: var(--muted-2); }
+
+.sp__input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(224, 122, 63, 0.1);
+}
+
+.sp__btn {
+  padding: 6px 14px;
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-family: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  white-space: nowrap;
+}
+
+.sp__btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.sp__btn--primary {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.sp__btn--primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.sp__btn--danger {
+  background: transparent;
+  color: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.sp__btn--danger:hover:not(:disabled) {
+  background: var(--accent-hover);
+  color: #fff;
+}
+
+.sp__badge {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: 12px;
+  white-space: nowrap;
+}
+
+.sp__badge--active {
+  background: #fbead9;
+  color: var(--accent-hover);
+}
+
+.sp__badge--focus {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.sp__progress {
+  height: 4px;
+  background: var(--card-border);
+  border-radius: 2px;
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+
+.sp__progressFill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.5s ease;
+}
+
+.sp__list {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sp__listItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+}
+
+.sp__listHost {
+  font-size: 13px;
+  color: var(--fg);
+}
+
+.sp__listRemove {
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  color: var(--muted-2);
+  font-size: 16px;
+  line-height: 1;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.sp__listRemove:hover {
+  background: #f3d5c8;
+  color: var(--accent-hover);
+}
+
+.sp__empty {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--muted-2);
 }
 
 /* ========== 小屏降级 ========== */
