@@ -10,8 +10,8 @@
 /** TimeTracker 周期性快照间隔（秒）。SW 重启时最多丢这个时间的计时。 */
 export const ALARM_PERIOD_S = 30;
 
-/** chrome.idle 键鼠空闲检测阈值（秒）。v2 固定 60s。 */
-export const IDLE_THRESHOLD_SEC = 60;
+/** chrome.idle 键鼠空闲检测默认阈值（秒）。D20：默认 180s，用户可配置。 */
+export const IDLE_THRESHOLD_DEFAULT_SEC = 180;
 
 /** BCAST_TICK 广播间隔（毫秒）。仅在有活跃 UI 连接时发送。 */
 export const TICK_INTERVAL_MS = 1000;
@@ -45,6 +45,7 @@ export const STORAGE_KEY = Object.freeze({
   FOCUS_TIMER: 'focusTimer',
   BLACKLIST: 'blacklist',
   CONFIG: 'config',
+  CONFIG_IDLE_THRESHOLD_SEC: 'config.idleThresholdSec',
   // session-only
   HOSTNAME_LAST_FOCUS: '__hostnameLastFocus',
 });

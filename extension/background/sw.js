@@ -8,7 +8,7 @@
  *   2. 维护 UI 连接状态（hasActiveUIPort），决定是否广播 BCAST_TICK。
  *   3. 启动时按正确顺序调用各模块 init()（顶层 import + onInstalled + onStartup 三入口）。
  *
- * 当前阶段：M4（TimeTracker + focusModel + idleGuard + alarms 全部接入）。
+ * 当前阶段：M4.5（D17 单一时间账本 + D20 idle 阈值可配）。
  */
 
 import { MSG, classify } from '../shared/messages.js';
@@ -39,10 +39,10 @@ function startTickBroadcast() {
   if (tickIntervalId !== null) return;
   // setInterval 在 SW 活跃期间有效；SW 睡了会停，但没 UI 的时候本来就不需要广播。
   // UI 存在 = 必有 port 在通讯 = SW 不会睡。
-  tickIntervalId = setInterval(async () => {
+  tickIntervalId = setInterval(() => {
     if (!hasActiveUIPort) return;
     const state = timeTracker.getTrackingState();
-    const todayMs = await timeTracker.getTodayTotalMs();
+    const todayMs = timeTracker.getTodayTotalMs();
     const activeTabMs = state.activeTabId !== null
       ? timeTracker.getTabCumulativeMs(state.activeTabId)
       : 0;
@@ -72,7 +72,7 @@ async function bootstrap() {
   bootstrapPromise = (async () => {
     if (bootstrapped) return;
     bootstrapped = true;
-    console.log(LOG_PREFIX, 'SW bootstrap v2.0.0 M4');
+    console.log(LOG_PREFIX, 'SW bootstrap v2.0.0 M4.5 (D17)');
 
     // 1. tabRegistry（需要先有它，timeTracker 靠它查 hostname）
     await tabRegistry.init({ emit: broadcast });
@@ -87,8 +87,8 @@ async function bootstrap() {
     // 4. focusModel（会调 timeTracker.onFocusWindow + onActivateTab 补齐初始焦点）
     await focusModel.init();
 
-    // 5. idleGuard
-    idleGuard.init();
+    // 5. idleGuard (D20: async — reads user config for idle threshold)
+    await idleGuard.init();
 
     // 6. alarms（最后启动 tick）
     alarms.init();
@@ -196,7 +196,7 @@ async function handleRequest(message, _sender) {
     }
 
     case MSG.REQ_GET_TODAY_WORK: {
-      const totalMs = await timeTracker.getTodayTotalMs();
+      const totalMs = timeTracker.getTodayTotalMs();
       // breakdown 留给 historyView 请求自己拿；这里返回总数即可
       return { totalMs };
     }

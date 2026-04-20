@@ -1,7 +1,7 @@
 /**
  * tests/timeTracker.test.js
  * --------------------------
- * 覆盖 ARCHITECTURE-v2.md §9.2 的核心用例。
+ * 覆盖 D17 单一时间账本模型 + M4 核心用例。
  *
  * 注意：本文件依赖 mockChrome.js 已在 runTests.html 里先加载。
  */
@@ -29,6 +29,8 @@ function tabInfoFactory(map) {
 }
 
 async function freshTracker(clockStart = 1_700_000_000_000, tabs = []) {
+  // 先等旧 timeLog 队列清空（防止上一个测试的 fire-and-forget appendSlice 泄漏到本测试的 storage）
+  await timeLog.flush();
   resetMockStorage();
   timeLog.__resetForTests();
   timeTracker.__testing.reset();
@@ -48,16 +50,27 @@ async function freshTracker(clockStart = 1_700_000_000_000, tabs = []) {
 // --------- suites ---------
 
 suite('TimeTracker — 基本累加', () => {
-  test('onActivate → 等 1s → onRemove：cumulative ≈ 1000ms', async () => {
+  test('onActivate → 等 1s → finalize via another activate：getTabCumulativeMs ≈ 1000ms', async () => {
+    const { clock } = await freshTracker(0, [
+      { id: 1, url: 'https://github.com/foo' },
+      { id: 2, url: 'https://example.com' },
+    ]);
+    timeTracker.onActivateTab(1);
+    clock.advance(1000);
+    timeTracker.onActivateTab(2);  // finalize tab 1
+    const ms = timeTracker.getTabCumulativeMs(1);
+    assert.closeTo(ms, 1000, 10, 'tab 1 cumulative ≈ 1000ms');
+  });
+
+  test('onRemoveTab：D17 不清 session 缓存，finalize 的 slice 进 timeLog', async () => {
     const { clock } = await freshTracker(0, [{ id: 1, url: 'https://github.com/foo' }]);
     timeTracker.onActivateTab(1);
     clock.advance(1000);
     timeTracker.onRemoveTab(1);
-    // onRemove 会清 cumulative（tab 关闭语义），但 finalize 的 slice 已经进了 timeLog
-    // 验证：从 finalize 看，读取接口拿不到（因为 map 清了）
+    // D17 变化：onRemoveTab 不再清 tabSessionMs
     const ms = timeTracker.getTabCumulativeMs(1);
-    assert.equal(ms, 0, 'cumulative cleared on close');
-    // 真实的"已经累计过"证据在 timeLog
+    assert.closeTo(ms, 1000, 10, 'D17: cumulative NOT cleared on close');
+    // 真实的持久化证据在 timeLog
     await timeLog.flush();
     const slices = await timeLog.getRange(-1, 1e15);
     assert.equal(slices.length, 1, 'one slice written');
@@ -106,7 +119,7 @@ suite('TimeTracker — 多窗口 focus', () => {
     clock.advance(500);
     const before = timeTracker.getTabCumulativeMs(1);
 
-    timeTracker.onFocusWindow(null);  // Chrome 失焦（WINDOW_ID_NONE 语义等同 null 传入）
+    timeTracker.onFocusWindow(null);  // Chrome 失焦
     assert.ok(timeTracker.isPausedBy('window-blur'), 'paused by window-blur');
     clock.advance(2000);
     const duringBlur = timeTracker.getTabCumulativeMs(1);
@@ -197,20 +210,30 @@ suite('TimeTracker — Private Mode / blacklist 作为 pauseReason', () => {
   });
 });
 
-suite('TimeTracker — SW 重启恢复', () => {
-  test('快照存在时 init：cumulative 从 storage 复原', async () => {
-    // 先手工造一份 storage 快照
+suite('TimeTracker — SW 重启恢复（D17 模型）', () => {
+  test('init 从 timeLog 重建 tabSessionMs', async () => {
     resetMockStorage();
-    await chrome.storage.local.set({
-      [STORAGE_KEY.TAB_CUMULATIVE]: { 42: 12345 },
-    });
-    timeTracker.__testing.reset();
+    timeLog.__resetForTests();
 
+    // 先造一些 timeLog 数据
+    const now = 1_700_000_050_000;
+    const dayStart = new Date(now);
+    dayStart.setHours(0, 0, 0, 0);
+    const base = dayStart.getTime();
+
+    await timeLog.appendSlice({ s: base + 1000, e: base + 5000, h: 'a.com', tid: 42 });
+    await timeLog.appendSlice({ s: base + 6000, e: base + 8000, h: 'b.com', tid: 99 });
+    await timeLog.flush();
+
+    timeTracker.__testing.reset();
     await timeTracker.init({
-      nowProvider: () => 1000,
+      nowProvider: () => now,
       tabInfoProvider: () => null,
     });
-    assert.equal(timeTracker.getTabCumulativeMs(42), 12345, 'restored');
+
+    // tab 42 = 4000ms, tab 99 = 2000ms
+    assert.equal(timeTracker.getTabCumulativeMs(42), 4000, 'tab 42 rebuilt from timeLog');
+    assert.equal(timeTracker.getTabCumulativeMs(99), 2000, 'tab 99 rebuilt from timeLog');
   });
 
   test('活跃 slice 快照被重启恢复：最多补算 ALARM_PERIOD_S*2', async () => {
@@ -218,7 +241,6 @@ suite('TimeTracker — SW 重启恢复', () => {
     timeLog.__resetForTests();
     const sliceStart = 1000;
     await chrome.storage.local.set({
-      [STORAGE_KEY.TAB_CUMULATIVE]: { 7: 500 },
       [STORAGE_KEY.ACTIVE_SLICE_SNAPSHOT]: {
         tabId: 7,
         hostname: 'a.com',
@@ -234,7 +256,7 @@ suite('TimeTracker — SW 重启恢复', () => {
     });
     // 应该补算 20s
     const ms = timeTracker.getTabCumulativeMs(7);
-    assert.equal(ms, 500 + 20_000, 'recovered 20s');
+    assert.equal(ms, 20_000, 'recovered 20s');
   });
 
   test('snapshot 超过上限时被裁剪', async () => {
@@ -295,6 +317,32 @@ suite('TimeTracker — URL 变化', () => {
     assert.ok(bSlice, 'b.com slice present');
     assert.closeTo(aSlice.e - aSlice.s, 500, 20, 'a.com ≈ 500ms');
     assert.closeTo(bSlice.e - bSlice.s, 300, 20, 'b.com ≈ 300ms');
+  });
+});
+
+suite('TimeTracker — getTodayTotalMs（D17 同步模型）', () => {
+  test('基本汇总：多 tab session + running slice', async () => {
+    const { clock } = await freshTracker(0, [
+      { id: 1, url: 'https://a.com' },
+      { id: 2, url: 'https://b.com' },
+    ]);
+    timeTracker.onActivateTab(1);
+    clock.advance(1000);
+    timeTracker.onActivateTab(2);
+    clock.advance(500);
+    // tab1 = 1000 (finalized), tab2 = 500 (running)
+    const total = timeTracker.getTodayTotalMs();
+    assert.closeTo(total, 1500, 10, 'today = tab1 finalized + tab2 running');
+  });
+
+  test('暂停期间不算入 today', async () => {
+    const { clock } = await freshTracker(0, [{ id: 1, url: 'https://a.com' }]);
+    timeTracker.onActivateTab(1);
+    clock.advance(200);
+    timeTracker.pause('idle');
+    clock.advance(5000);
+    const total = timeTracker.getTodayTotalMs();
+    assert.closeTo(total, 200, 10, 'only active time counts');
   });
 });
 

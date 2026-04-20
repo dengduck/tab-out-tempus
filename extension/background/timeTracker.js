@@ -1,21 +1,26 @@
 /**
  * background/timeTracker.js
  * --------------------------
- * ✨ v2 时间追踪核心。**唯一**能修改 tabCumulativeMs 的地方。
+ * ✨ v2 时间追踪核心（M4.5 D17 单一时间账本模型）。
  *
- * 铁律（违反即 v1 时代的 bug 借尸还魂）：
- *   1. tabCumulativeMs 只允许 +=；禁止赋值、禁止减少。唯一例外：init 从 snapshot 恢复时的"初始化赋值"。
- *   2. pauseReasons 非空 → 绝对不开新 slice。恢复的前提是 Set 清空 且 有焦点 tab。
- *   3. 所有"暂停行为"必须走 pause(reason) / resume(reason)；禁止绕过 Set 直接改 activeTabId。
+ * **timeLog 是唯一持久真相源。**
+ * tabSessionMs 是纯内存缓存（= 今日 timeLog 按 tid 聚合），
+ * SW 重启时从 timeLog 重建，不持久化。
+ *
+ * 铁律：
+ *   1. timeLog.appendSlice 是唯一持久化时间数据的方式。
+ *   2. tabSessionMs 是 timeLog 的内存影子，只在 finalizeActiveSlice 时 `+=`。
+ *      禁止赋值覆盖（init 重建例外）。
+ *   3. pauseReasons 非空 → 绝对不开新 slice。恢复前提：Set 清空 && 有焦点 tab。
  *   4. finalize 要么把 slice 写掉，要么什么都不做；不允许留"半个 slice"。
  *
  * 数据源 & 边界：
- *   - hostname 从 tabRegistry.get(tabId).url 提取（shared/hostname.js）
+ *   - hostname 从 tabInfoProvider(tabId).url 提取（shared/hostname.js）
  *   - 写 timeLog 通过 timeLog.appendSlice（串行化）
- *   - 持久化通过 store（__tabCumulative + __activeSliceSnapshot）
- *   - 时间注入：nowProvider 允许测试里替换 Date.now（默认用 Date.now）
+ *   - 持久化仅 __activeSliceSnapshot（30s 周期，防 SW 睡死丢时间）
+ *   - 时间注入：nowProvider 允许测试里替换 Date.now
  *
- * 里程碑：M4。
+ * 里程碑：M4 → M4.5（D17 收敛）。
  */
 
 import { STORAGE_KEY, LOG_PREFIX, ALARM_PERIOD_S } from '../shared/constants.js';
@@ -29,8 +34,12 @@ import * as tabRegistry from './tabRegistry.js';
 
 // ========== 内部状态 ==========
 
-/** 单调累计器。唯一允许的写操作是 `+=`。 @type {Map<number, number>} */
-const tabCumulativeMs = new Map();
+/**
+ * 今日 timeLog 的内存缓存：tabId → 今日已 finalize 的毫秒总和。
+ * 纯内存，不持久化。SW 重启时从 timeLog 重建。
+ * @type {Map<number, number>}
+ */
+const tabSessionMs = new Map();
 
 /** 当前正在计时的 tab id；null = 暂停中。 @type {number | null} */
 let activeTabId = null;
@@ -82,11 +91,19 @@ function canRun() {
   return pauseReasons.size === 0 && activeTabId !== null;
 }
 
+/** 今日本地时间 0:00 ~ 24:00 的 UTC 毫秒范围。 */
+function localDayRange(ts) {
+  const d = new Date(ts);
+  d.setHours(0, 0, 0, 0);
+  const start = d.getTime();
+  return { start, end: start + 24 * 3600 * 1000 };
+}
+
 // ========== 核心原子操作 ==========
 
 /**
- * finalize 当前活跃 slice：把 [activeSliceStart, now] 写 timeLog，并 += 到 cumulative。
- * 没有活跃 slice 时 no-op。**单调性由这个函数独家保证。**
+ * finalize 当前活跃 slice：把 [activeSliceStart, now] 写 timeLog，并 += 到 tabSessionMs 缓存。
+ * 没有活跃 slice 时 no-op。
  */
 function finalizeActiveSlice() {
   if (activeTabId === null || activeSliceStart === null) return;
@@ -103,9 +120,9 @@ function finalizeActiveSlice() {
 
   if (delta <= 0) return;  // 时钟回拨或同毫秒事件
 
-  // 单调累加（铁律 #1）
-  const prev = tabCumulativeMs.get(finishedTabId) || 0;
-  tabCumulativeMs.set(finishedTabId, prev + delta);
+  // 更新内存缓存（铁律 #2：只 +=）
+  const prev = tabSessionMs.get(finishedTabId) || 0;
+  tabSessionMs.set(finishedTabId, prev + delta);
 
   // 落盘 slice（串行化队列；不 await，让 caller 快）
   if (finishedHostname) {
@@ -210,8 +227,8 @@ export function onActivateTab(tabId, _windowId) {
 }
 
 /**
- * tab 关闭。finalize 最后一段，清 cumulative（可选；保留可用于"关了 30s 再开"场景，
- * 但 v2 的语义是"每 tab 从打开到关闭的 lifetime"，关了就归零）。
+ * tab 关闭。finalize 最后一段。
+ * D17：不清 tabSessionMs（timeLog 天然保留已关闭 tab 的记录）。
  */
 export function onRemoveTab(tabId) {
   if (typeof tabId !== 'number') return;
@@ -221,7 +238,7 @@ export function onRemoveTab(tabId) {
     activeHostname = '';
     pauseReasons.add('no-active-tab');
   }
-  tabCumulativeMs.delete(tabId);
+  // D17 变化：不再 delete tabSessionMs（关闭的 tab 时间在 timeLog 里保留）
   broadcastStateChange();
 }
 
@@ -241,21 +258,14 @@ export function onUpdateUrl(tabId, oldUrl, newUrl) {
 // ========== 公共 API：周期性 ==========
 
 /**
- * 30s 周期 tick：
- *   1. 把当前活跃 slice 做一次"快照 finalize"（不真的关 slice，只写 snapshot 让 SW 重启能续）
- *   2. 刷一份 __tabCumulative 到 storage
- * 设计选择：不真的 finalize 然后 start（那样会切得碎）；只记录 snapshot。
+ * 30s 周期 tick：持久化 active slice snapshot（防 SW 睡死）。
+ * D17：不再持久化 tabCumulative（时间真相在 timeLog）。
  */
 export async function tick() {
   await persistSnapshot();
 }
 
 async function persistSnapshot() {
-  // cumulative
-  const dump = {};
-  for (const [k, v] of tabCumulativeMs) dump[k] = v;
-  await localSet(STORAGE_KEY.TAB_CUMULATIVE, dump);
-
   // active slice snapshot（SW 重启时用来 finalize 丢失的时间）
   if (activeTabId !== null && activeSliceStart !== null) {
     await localSet(STORAGE_KEY.ACTIVE_SLICE_SNAPSHOT, {
@@ -266,13 +276,17 @@ async function persistSnapshot() {
   } else {
     await localRemove(STORAGE_KEY.ACTIVE_SLICE_SNAPSHOT);
   }
+
+  // D17 迁移：清理 v1 遗留的 __tabCumulative 数据（一次性）
+  try {
+    await localRemove(STORAGE_KEY.TAB_CUMULATIVE);
+  } catch (_) { /* ignore */ }
 }
 
 /**
  * SW 启动调用。
- *   - 从 __tabCumulative 恢复累计（初始化赋值，铁律 #1 的唯一例外）
- *   - 从 __activeSliceSnapshot 恢复"丢失的片段"：把 [sliceStart, min(now, sliceStart + ALARM_PERIOD_S*2)] 算成有效
- *     （上限 ALARM_PERIOD_S*2 是防御：万一 SW 睡了太久，不把用户实际离开的时间也算上）
+ *   - 从 timeLog 今日数据重建 tabSessionMs（D17：timeLog 是唯一真相）
+ *   - 从 __activeSliceSnapshot 恢复"丢失的片段"
  */
 export async function init(deps = {}) {
   emit = deps.emit || null;
@@ -281,27 +295,27 @@ export async function init(deps = {}) {
   if (initialized) return;
   initialized = true;
 
-  // 恢复 cumulative
-  const dump = await localGet(STORAGE_KEY.TAB_CUMULATIVE);
-  if (dump && typeof dump === 'object') {
-    for (const k of Object.keys(dump)) {
-      const id = Number(k);
-      const v = Number(dump[k]);
-      if (Number.isFinite(id) && Number.isFinite(v) && v >= 0) {
-        tabCumulativeMs.set(id, v);
-      }
+  // D17：从 timeLog 今日数据重建 tabSessionMs
+  const { start, end } = localDayRange(now());
+  const todaySlices = await getRange(start, end);
+  for (const sl of todaySlices) {
+    if (typeof sl.tid === 'number') {
+      const prev = tabSessionMs.get(sl.tid) || 0;
+      tabSessionMs.set(sl.tid, prev + (sl.e - sl.s));
     }
   }
 
-  // 恢复丢失 slice
+  // 恢复丢失 slice（SW 睡死期间的时间补偿）
   const snap = await localGet(STORAGE_KEY.ACTIVE_SLICE_SNAPSHOT);
   if (snap && typeof snap.sliceStart === 'number' && typeof snap.tabId === 'number') {
     const cap = snap.sliceStart + ALARM_PERIOD_S * 2 * 1000;
     const endTs = Math.min(now(), cap);
     const delta = endTs - snap.sliceStart;
     if (delta > 0) {
-      const prev = tabCumulativeMs.get(snap.tabId) || 0;
-      tabCumulativeMs.set(snap.tabId, prev + delta);
+      // 更新内存缓存
+      const prev = tabSessionMs.get(snap.tabId) || 0;
+      tabSessionMs.set(snap.tabId, prev + delta);
+      // 写 timeLog
       if (snap.hostname) {
         appendSlice({ s: snap.sliceStart, e: endTs, h: snap.hostname, tid: snap.tabId });
       }
@@ -312,13 +326,17 @@ export async function init(deps = {}) {
   // 初始状态：尚未收到任何 activate / focus 事件 → no-active-tab
   pauseReasons.add('no-active-tab');
 
-  log('init done, restored tabs =', tabCumulativeMs.size);
+  log('init done, today sessions =', tabSessionMs.size, 'tabs');
 }
 
 // ========== 公共 API：读接口 ==========
 
+/**
+ * 单个 tab 今日累计时长。= tabSessionMs 缓存 + (活跃 tab 的 running slice)。
+ * API 语义不变（UI 层无感）。
+ */
 export function getTabCumulativeMs(tabId) {
-  const base = tabCumulativeMs.get(tabId) || 0;
+  const base = tabSessionMs.get(tabId) || 0;
   if (tabId === activeTabId && activeSliceStart !== null) {
     return base + (now() - activeSliceStart);
   }
@@ -332,40 +350,51 @@ export function getActiveRunningMs() {
 
 /**
  * "今日工作"= 今日 timeLog 聚合 + 当前 running slice。
- * 为了不让本函数每次都查一次 storage（UI 1s 一次 tick），内部做了粗缓存：
- *   1s 内复用同一份 historical 数据。
+ * 优化：用 tabSessionMs 总和代替每次查 storage。
  */
-let todayCache = { ts: 0, historicalMs: 0 };
-
-export async function getTodayTotalMs() {
-  const { start, end } = localDayRange(now());
-  const nowTs = now();
-  if (nowTs - todayCache.ts < 1000) {
-    return todayCache.historicalMs + getActiveRunningMs();
-  }
-  const slices = await getRange(start, end);
-  let hist = 0;
-  for (const sl of slices) hist += sl.e - sl.s;
-  todayCache = { ts: nowTs, historicalMs: hist };
-  return hist + getActiveRunningMs();
+export function getTodayTotalMs() {
+  let total = 0;
+  for (const ms of tabSessionMs.values()) total += ms;
+  total += getActiveRunningMs();
+  return total;
 }
 
-function localDayRange(ts) {
-  const d = new Date(ts);
-  d.setHours(0, 0, 0, 0);
-  const start = d.getTime();
-  return { start, end: start + 24 * 3600 * 1000 };
-}
-
+/**
+ * 指定 hostname 下所有 open tab 的今日累计总时长。
+ * （M5 域名卡聚合时长 / M6 域名排行 都用这个）
+ */
 export function getHostnameTotalMsForOpenTabs(hostname) {
   let total = 0;
-  for (const [tabId] of tabCumulativeMs) {
+  for (const [tabId] of tabSessionMs) {
     const info = tabInfoProvider(tabId);
     if (!info) continue;
     if (getHostname(info.url || '') !== hostname) continue;
     total += getTabCumulativeMs(tabId);
   }
   return total;
+}
+
+/**
+ * 今日域名维度聚合：返回 {hostname: ms} 字典。
+ * 数据来源是 timeLog 缓存（tabSessionMs），不再额外查 storage。
+ * 给 M6 历史统计用。
+ */
+export function getDomainTodayMs() {
+  const result = {};
+  for (const [tabId, ms] of tabSessionMs) {
+    const info = tabInfoProvider(tabId);
+    const host = info ? getHostname(info.url || '') : '';
+    if (!host) continue;
+    result[host] = (result[host] || 0) + ms;
+  }
+  // 加上 running slice
+  if (activeTabId !== null && activeSliceStart !== null) {
+    const host = activeHostname || hostnameOf(activeTabId);
+    if (host) {
+      result[host] = (result[host] || 0) + (now() - activeSliceStart);
+    }
+  }
+  return result;
 }
 
 /** @returns {TrackingState} */
@@ -382,7 +411,7 @@ export function getTrackingState() {
 
 export const __testing = {
   reset() {
-    tabCumulativeMs.clear();
+    tabSessionMs.clear();
     activeTabId = null;
     activeSliceStart = null;
     activeHostname = '';
@@ -391,12 +420,11 @@ export const __testing = {
     tabInfoProvider = (tabId) => tabRegistry.get?.(tabId) || null;
     emit = null;
     initialized = false;
-    todayCache = { ts: 0, historicalMs: 0 };
   },
   setNowProvider(fn) { nowProvider = fn; },
   setTabInfoProvider(fn) { tabInfoProvider = fn; },
   setInitialized(b) { initialized = b; },
-  getCumulativeMap() { return new Map(tabCumulativeMs); },
+  getSessionMap() { return new Map(tabSessionMs); },
   getInternalActiveTabId() { return activeTabId; },
   getInternalSliceStart() { return activeSliceStart; },
   forceStart({ tabId, hostname, sliceStart }) {
