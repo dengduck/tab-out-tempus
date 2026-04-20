@@ -28,7 +28,7 @@ import { burst as confettiBurst } from './utils/confetti.js';
 let lastState = null;  // 缓存 global state，更新 status 行用
 
 async function main() {
-  console.log(LOG_PREFIX, 'UI main bootstrap (v2.0.0 M6 history-view)');
+  console.log(LOG_PREFIX, 'UI main bootstrap (v2.0.0 M8)');
 
   try {
     await messaging.notifyUIReady();
@@ -55,7 +55,7 @@ async function main() {
   } catch (err) {
     header.updateStatus(0, []);
     const statusEl = $('.header .status');
-    if (statusEl) statusEl.textContent = `v2.0.0 · M7 · ⚠️ SW 连接失败：${err?.message || err}`;
+    if (statusEl) statusEl.textContent = `v2.0.0 · M8 · ⚠️ SW 连接失败：${err?.message || err}`;
     console.error(LOG_PREFIX, 'snapshot failed', err);
     return;
   }
@@ -194,7 +194,7 @@ async function main() {
     messaging.notifyUIGone().catch(() => { /* best-effort */ });
   });
 
-  console.log(LOG_PREFIX, 'M6 ready,', tabs.length, 'tabs, todayMs =', todayResp?.totalMs);
+  console.log(LOG_PREFIX, 'M8 ready,', tabs.length, 'tabs, todayMs =', todayResp?.totalMs);
 }
 
 /**

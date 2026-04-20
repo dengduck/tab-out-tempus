@@ -8,7 +8,7 @@
  *   2. 维护 UI 连接状态（hasActiveUIPort），决定是否广播 BCAST_TICK。
  *   3. 启动时按正确顺序调用各模块 init()（顶层 import + onInstalled + onStartup 三入口）。
  *
- * 当前阶段：M4.5（D17 单一时间账本 + D20 idle 阈值可配）。
+ * 当前阶段：M8（Focus Timer + Blacklist + Private Mode）。
  */
 
 import { MSG, classify } from '../shared/messages.js';
@@ -19,6 +19,9 @@ import * as timeTracker from './timeTracker.js';
 import * as focusModel from './focusModel.js';
 import * as idleGuard from './idleGuard.js';
 import * as alarms from './alarms.js';
+import * as privateMode from './privateMode.js';
+import * as blacklist from './blacklist.js';
+import * as focusTimer from './focusTimer.js';
 import { getRange } from './timeLog.js';
 import { localGet, localSet } from './store.js';
 
@@ -73,7 +76,7 @@ async function bootstrap() {
   bootstrapPromise = (async () => {
     if (bootstrapped) return;
     bootstrapped = true;
-    console.log(LOG_PREFIX, 'SW bootstrap v2.0.0 M4.5 (D17)');
+    console.log(LOG_PREFIX, 'SW bootstrap v2.0.0 M8');
 
     // 1. tabRegistry（需要先有它，timeTracker 靠它查 hostname）
     await tabRegistry.init({ emit: broadcast });
@@ -91,7 +94,12 @@ async function bootstrap() {
     // 5. idleGuard (D20: async — reads user config for idle threshold)
     await idleGuard.init();
 
-    // 6. alarms（最后启动 tick）
+    // 6. M8 模块（依赖 timeTracker 已 init）
+    await privateMode.init({ emit: broadcast });
+    await blacklist.init({ emit: broadcast });
+    await focusTimer.init({ emit: broadcast });
+
+    // 7. alarms（最后启动 tick）
     alarms.init();
   })();
   return bootstrapPromise;
@@ -100,6 +108,8 @@ async function bootstrap() {
 function registerTabEventsForTracker() {
   chrome.tabs.onActivated.addListener((activeInfo) => {
     timeTracker.onActivateTab(activeInfo.tabId, activeInfo.windowId);
+    // M8: 切 tab 后检查黑名单
+    blacklist.checkTab(activeInfo.tabId);
   });
 
   chrome.tabs.onRemoved.addListener((tabId) => {
@@ -108,9 +118,9 @@ function registerTabEventsForTracker() {
 
   chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     if (changeInfo.url) {
-      // 取"之前的 url"需要额外缓存；简化：让 timeTracker 自己比较 old/new hostname
-      // 这里拿不到 oldUrl，传 '' 走，onUpdateUrl 内部看到 hostname 变了就 finalize+start
       timeTracker.onUpdateUrl(tabId, '', changeInfo.url);
+      // M8: URL 变了也重新检查黑名单
+      blacklist.checkTab(tabId);
     }
   });
 }
@@ -154,9 +164,9 @@ async function handleRequest(message, _sender) {
     case MSG.REQ_GET_STATE:
       return {
         tracking: timeTracker.getTrackingState(),
-        privateMode: null,        // M8 再接
-        focusTimer: null,         // M8 再接
-        blacklist: [],            // M8 再接
+        privateMode: privateMode.getStatus(),
+        focusTimer: focusTimer.getStatus(),
+        blacklist: blacklist.getList(),
       };
 
     case MSG.REQ_GET_TABS:
@@ -241,6 +251,51 @@ async function handleRequest(message, _sender) {
       const filtered = saved.filter((e) => e.id !== entryId);
       await localSet(STORAGE_KEY.SAVED, filtered);
       return { removed: entryId };
+    }
+
+    // ===== M8: Private Mode =====
+
+    case MSG.REQ_START_PRIVATE_MODE: {
+      const durationMin = message.durationMin;
+      if (typeof durationMin !== 'number' || durationMin <= 0) throw new Error('invalid durationMin');
+      return await privateMode.start(durationMin);
+    }
+
+    case MSG.REQ_STOP_PRIVATE_MODE: {
+      await privateMode.stop();
+      return { stopped: true };
+    }
+
+    // ===== M8: Focus Timer =====
+
+    case MSG.REQ_START_FOCUS_TIMER: {
+      const durationMin = message.durationMin;
+      if (typeof durationMin !== 'number' || durationMin <= 0) throw new Error('invalid durationMin');
+      const opts = {};
+      if (typeof message.strict === 'boolean') opts.strict = message.strict;
+      if (Array.isArray(message.allowedHosts)) opts.allowedHosts = message.allowedHosts;
+      return await focusTimer.start(durationMin, opts);
+    }
+
+    case MSG.REQ_STOP_FOCUS_TIMER: {
+      await focusTimer.stop();
+      return { stopped: true };
+    }
+
+    // ===== M8: Blacklist =====
+
+    case MSG.REQ_BLACKLIST_ADD: {
+      const hostname = message.hostname;
+      if (typeof hostname !== 'string' || !hostname) throw new Error('invalid hostname');
+      await blacklist.add(hostname);
+      return { added: hostname, list: blacklist.getList() };
+    }
+
+    case MSG.REQ_BLACKLIST_REMOVE: {
+      const hostname = message.hostname;
+      if (typeof hostname !== 'string' || !hostname) throw new Error('invalid hostname');
+      await blacklist.remove(hostname);
+      return { removed: hostname, list: blacklist.getList() };
     }
 
     default:

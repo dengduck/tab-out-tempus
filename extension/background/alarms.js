@@ -1,16 +1,24 @@
 /**
  * background/alarms.js
  * ---------------------
- * chrome.alarms 统一管理。v2 只用一个周期 alarm：
+ * chrome.alarms 统一管理。
+ *
+ * 周期 alarm：
  *   'tempus-tick' 每 ALARM_PERIOD_S 秒触发 → timeTracker.tick()
+ *
+ * 一次性 alarm（M8）：
+ *   'tempus-private-mode-end' → privateMode.onAlarm()
+ *   'tempus-focus-timer-end'  → focusTimer.onAlarm()
  *
  * 铁律：永远不用 setInterval，SW 休眠会停。
  *
- * 里程碑：M4。
+ * 里程碑：M4 → M8。
  */
 
 import { LOG_PREFIX, ALARM_PERIOD_S } from '../shared/constants.js';
 import * as timeTracker from './timeTracker.js';
+import * as privateMode from './privateMode.js';
+import * as focusTimer from './focusTimer.js';
 
 const ALARM_TICK = 'tempus-tick';
 
@@ -29,6 +37,10 @@ export function init() {
       timeTracker.tick().catch((err) =>
         console.error(LOG_PREFIX, 'tick failed', err)
       );
+    } else {
+      // M8: 分发给各模块
+      privateMode.onAlarm(alarm.name);
+      focusTimer.onAlarm(alarm.name);
     }
   });
 
