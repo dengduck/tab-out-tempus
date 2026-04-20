@@ -55,6 +55,7 @@ function startTickBroadcast() {
       todayMs,
       activeTabId: state.activeTabId,
       activeTabMs,
+      isActive: state.isActive,  // M8: 直接告诉 UI 是否在计时
     });
   }, TICK_INTERVAL_MS);
 }

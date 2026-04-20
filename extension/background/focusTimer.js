@@ -47,21 +47,31 @@ export async function start(durationMin, opts = {}) {
     throw new Error('invalid durationMin');
   }
 
+  // 如果已有运行中的 timer，先停掉
+  if (state) {
+    try { chrome.alarms.clear(ALARM_NAME); } catch (_) { /* ignore */ }
+  }
+
   const now = Date.now();
+  const durationMs = durationMin * 60 * 1000;
+  const endTime = now + durationMs;
+
   state = {
     startTime: now,
-    endTime: now + durationMin * 60 * 1000,
-    durationMs: durationMin * 60 * 1000,
+    endTime,
+    durationMs,
     strict: !!opts.strict,
     allowedHosts: Array.isArray(opts.allowedHosts) ? opts.allowedHosts : [],
   };
 
   await localSet(STORAGE_KEY.FOCUS_TIMER, state);
-  chrome.alarms.create(ALARM_NAME, { when: state.endTime });
+  chrome.alarms.create(ALARM_NAME, { when: endTime });
 
   log('started', durationMin, 'min, strict =', state.strict);
   broadcastChange();
-  return getStatus();
+
+  // 安全取状态，state 应该不为 null 但防御性编程
+  return getStatus() || { active: true, startTime: now, endTime, durationMs, remainingMs: durationMs, strict: state.strict };
 }
 
 export async function stop() {

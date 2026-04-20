@@ -153,7 +153,8 @@ async function main() {
   let timesRefreshInFlight = false;
   messaging.subscribeTick(async (payload) => {
     if (!payload) return;
-    const isActive = payload.activeTabId !== null && payload.activeTabId !== undefined;
+    // M8: 用 SW 的 isActive 真相，不从 activeTabId 推断（暂停时 activeTabId 仍非 null）
+    const isActive = typeof payload.isActive === 'boolean' ? payload.isActive : (payload.activeTabId != null);
     header.updateTodayMs(payload.todayMs, isActive);
 
     // 节流：上一次 REQ 还没回来就跳过这一轮
