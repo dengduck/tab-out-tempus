@@ -12,12 +12,13 @@
  *   6. 委托事件：activate / close-tab / close-all（M3 动效）
  *   7. beforeunload 通知 SW
  *
- * 里程碑：M5（时间 UI 全链路接入）。
+ * 里程碑：M6（历史统计面板）。
  */
 
 import * as messaging from './messaging.js';
 import * as tabsGrid from './views/tabsGrid.js';
 import * as header from './views/header.js';
+import * as historyView from './views/historyView.js';
 import { LOG_PREFIX } from '../shared/constants.js';
 import { $ } from './utils/dom.js';
 import { playSwoosh } from './utils/audio.js';
@@ -26,7 +27,7 @@ import { burst as confettiBurst } from './utils/confetti.js';
 let lastState = null;  // 缓存 global state，更新 status 行用
 
 async function main() {
-  console.log(LOG_PREFIX, 'UI main bootstrap (v2.0.0 M5 time-ui)');
+  console.log(LOG_PREFIX, 'UI main bootstrap (v2.0.0 M6 history-view)');
 
   try {
     await messaging.notifyUIReady();
@@ -52,7 +53,7 @@ async function main() {
   } catch (err) {
     header.updateStatus(0, []);
     const statusEl = $('.header .status');
-    if (statusEl) statusEl.textContent = `v2.0.0 · M5 · ⚠️ SW 连接失败：${err?.message || err}`;
+    if (statusEl) statusEl.textContent = `v2.0.0 · M6 · ⚠️ SW 连接失败：${err?.message || err}`;
     console.error(LOG_PREFIX, 'snapshot failed', err);
     return;
   }
@@ -73,6 +74,9 @@ async function main() {
     tabTimes: timesResp?.tabTimes || {},
     activeTabId: timesResp?.activeTabId ?? null,
   });
+
+  // M6: 初始化历史统计面板（默认收起，点 📊 展开）
+  historyView.init();
 
   // 事件委托
   tabsGrid.bindEvents(gridEl, {
@@ -176,7 +180,7 @@ async function main() {
     messaging.notifyUIGone().catch(() => { /* best-effort */ });
   });
 
-  console.log(LOG_PREFIX, 'M5 ready,', tabs.length, 'tabs, todayMs =', todayResp?.totalMs);
+  console.log(LOG_PREFIX, 'M6 ready,', tabs.length, 'tabs, todayMs =', todayResp?.totalMs);
 }
 
 /**

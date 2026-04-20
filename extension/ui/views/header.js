@@ -87,5 +87,5 @@ export function updateStatus(tabCount, pauseReasons = []) {
   if (!statusEl) statusEl = $('.header .status');
   if (!statusEl) return;
   const reasons = pauseReasons.length > 0 ? ` · ⏸ ${pauseReasons.join(',')}` : '';
-  statusEl.textContent = `v2.0.0 · M5 · ${tabCount} 个标签页${reasons}`;
+  statusEl.textContent = `v2.0.0 · M6 · ${tabCount} 个标签页${reasons}`;
 }
