@@ -112,9 +112,16 @@ body {
   50%      { box-shadow: 0 0 0 6px rgba(224, 122, 63, 0); }
 }
 
-/* ========== 设置按钮 (M9) ========== */
+/* ========== Header Widget 按钮（M9 — 🔒/🍅 直接操作） ========== */
 
-.settingsToggle {
+.headerWidget__container {
+  position: relative;
+}
+
+.headerWidget__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: var(--radius-sm);
@@ -123,42 +130,98 @@ body {
   cursor: pointer;
   transition: all 0.15s ease;
   line-height: 1;
+  font-family: inherit;
 }
 
-.settingsToggle:hover {
+.headerWidget__btn:hover {
   border-color: var(--accent);
   box-shadow: var(--shadow-sm);
 }
 
-.settingsToggle.is-active {
+.headerWidget__btn.is-active {
   background: var(--accent);
   border-color: var(--accent);
   box-shadow: 0 0 0 2px rgba(224, 122, 63, 0.15);
 }
 
-/* ========== 历史统计按钮 (M6) ========== */
+.headerWidget__btn:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
 
-.historyToggle {
+.headerWidget__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  color: var(--muted);
+}
+
+.headerWidget__btn.is-active .headerWidget__icon {
+  color: #fff;
+}
+
+.headerWidget__text {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--fg);
+  white-space: nowrap;
+}
+
+.headerWidget__btn.is-active .headerWidget__text {
+  color: #fff;
+}
+
+.headerWidget__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+  font-family: "SF Mono", "Menlo", "Consolas", monospace;
+  letter-spacing: 0.02em;
+}
+
+.headerWidget__btn.is-active .headerWidget__label {
+  color: #fff;
+}
+
+/* Dropdown for Focus Timer */
+.headerWidget__dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: var(--radius-sm);
-  padding: 6px 10px;
-  font-size: 16px;
+  box-shadow: var(--shadow-md);
+  padding: 4px;
+  min-width: 120px;
+  z-index: 100;
+}
+
+.headerWidget__dropdown[hidden] { display: none; }
+
+.headerWidget__dropdownItem {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--fg);
+  text-align: left;
   cursor: pointer;
-  transition: all 0.15s ease;
-  line-height: 1;
+  border-radius: 4px;
+  transition: background 0.1s ease;
 }
 
-.historyToggle:hover {
-  border-color: var(--accent);
-  box-shadow: var(--shadow-sm);
+.headerWidget__dropdownItem:hover {
+  background: var(--chip-hover);
 }
 
-.historyToggle.is-active {
-  background: var(--accent);
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(224, 122, 63, 0.15);
-}
+/* (settingsToggle/historyToggle 已合并到 .headerWidget__btn) */
 
 /* ========== 历史统计面板 (M6) ========== */
 
@@ -471,6 +534,29 @@ body {
   border-color: var(--accent);
 }
 
+/* "关闭重复" 按钮 — amber 色调 */
+.domainCard__closeDupes {
+  background: transparent;
+  border: 1px solid #f59e0b;
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  font-size: 11px;
+  color: #b45309;
+  cursor: pointer;
+  flex-shrink: 0;
+  font-family: inherit;
+  font-weight: 500;
+  transition: all 0.12s ease;
+}
+
+.domainCard__closeDupes:hover {
+  background: #f59e0b;
+  color: #fff;
+  border-color: #f59e0b;
+}
+
+.domainCard__closeDupes[hidden] { display: none; }
+
 .domainCard__chips {
   display: flex;
   flex-direction: column;
@@ -548,6 +634,20 @@ body {
 }
 
 .tabChip__badge[hidden] { display: none; }
+
+/* ========== 重复标签 badge (M9) ========== */
+
+.tabChip__dupe {
+  font-size: 11px;
+  font-weight: 600;
+  color: #b45309;
+  background: #fef3c7;
+  padding: 1px 6px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.tabChip__dupe[hidden] { display: none; }
 
 .tabChip__close {
   width: 22px;

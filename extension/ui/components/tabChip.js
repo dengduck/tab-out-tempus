@@ -46,6 +46,8 @@ export function create(tabInfo) {
 
   const badge = h('span', { class: 'tabChip__badge', hidden: '' });
 
+  const dupeBadge = h('span', { class: 'tabChip__dupe', hidden: '' });
+
   const saveBtn = h('button', {
     class: 'tabChip__save',
     'data-action': 'save-for-later',
@@ -65,7 +67,7 @@ export function create(tabInfo) {
   const chip = h('div', {
     class: 'tabChip',
     'data-tab-id': String(tabInfo.id),
-  }, [favicon, title, badge, saveBtn, closeBtn]);
+  }, [favicon, title, badge, dupeBadge, saveBtn, closeBtn]);
 
   return chip;
 }
@@ -90,6 +92,26 @@ export function updateBadge(el, ms, isActive = false) {
   if (badge.hidden) badge.hidden = false;
   if (badge.textContent !== text) badge.textContent = text;
   badge.classList.toggle('is-active', !!isActive);
+}
+
+/**
+ * 更新 tab 重复 badge。
+ *   - dupeCount <= 1 → 隐藏 badge
+ *   - dupeCount >= 2 → 显示 "(2x)" / "(3x)" 等
+ * @param {HTMLElement} el tabChip 根元素
+ * @param {number} dupeCount 该 URL 在全局出现次数（含自身）
+ */
+export function updateDupeBadge(el, dupeCount) {
+  if (!el) return;
+  const badge = el.querySelector('.tabChip__dupe');
+  if (!badge) return;
+  if (typeof dupeCount !== 'number' || dupeCount < 2) {
+    if (!badge.hidden) badge.hidden = true;
+    return;
+  }
+  const text = `(${dupeCount}x)`;
+  if (badge.hidden) badge.hidden = false;
+  if (badge.textContent !== text) badge.textContent = text;
 }
 
 function defaultFaviconFor(url) {

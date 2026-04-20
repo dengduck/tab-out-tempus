@@ -21,8 +21,9 @@
 
 import { h } from '../utils/dom.js';
 import { getHostname, isHomepage, groupByDomain } from '../utils/domain.js';
-import { create as createCard, updateTime as updateCardTime } from '../components/domainCard.js';
-import { create as createChip, updateBadge as updateChipBadge } from '../components/tabChip.js';
+import { normalizeUrl } from '../../shared/hostname.js';
+import { create as createCard, updateTime as updateCardTime, updateDupeButton } from '../components/domainCard.js';
+import { create as createChip, updateBadge as updateChipBadge, updateDupeBadge } from '../components/tabChip.js';
 import { render as renderHomepages } from './homepagesGroup.js';
 
 /** @type {HTMLElement|null} */
@@ -56,6 +57,8 @@ export function render(root, tabs) {
       '暂无可分组的标签页。（chrome:// 和扩展页不显示）',
     ]));
   }
+
+  refreshDuplicates();
 }
 
 /**
@@ -69,12 +72,14 @@ export function applyChange(action, tabInfo) {
   if (action === 'added') {
     currentTabs.set(tabInfo.id, tabInfo);
     insertChipForTab(tabInfo);
+    refreshDuplicates();
     return;
   }
 
   if (action === 'removed') {
     removeChipForTab(tabInfo.id);
     currentTabs.delete(tabInfo.id);
+    refreshDuplicates();
     return;
   }
 
@@ -91,6 +96,7 @@ export function applyChange(action, tabInfo) {
       // 就地更新
       updateChipInPlace(tabInfo);
     }
+    refreshDuplicates();
     return;
   }
 
@@ -102,9 +108,9 @@ export function applyChange(action, tabInfo) {
 }
 
 /**
- * 事件委托：activate-tab / close-tab / close-all / close-homepages / save-for-later。
+ * 事件委托：activate-tab / close-tab / close-all / close-homepages / save-for-later / close-duplicates。
  * @param {HTMLElement} root
- * @param {{onActivate: fn, onCloseTab: fn, onCloseAll: fn, onCloseHomepages: fn, onSaveForLater?: fn}} handlers
+ * @param {{onActivate: fn, onCloseTab: fn, onCloseAll: fn, onCloseHomepages: fn, onSaveForLater?: fn, onCloseDuplicates?: fn}} handlers
  */
 export function bindEvents(root, handlers) {
   root.addEventListener('click', (e) => {
@@ -129,6 +135,9 @@ export function bindEvents(root, handlers) {
     } else if (action === 'save-for-later') {
       const id = Number(target.getAttribute('data-tab-id'));
       handlers.onSaveForLater?.(id);
+    } else if (action === 'close-duplicates') {
+      const host = target.getAttribute('data-hostname');
+      handlers.onCloseDuplicates?.(host);
     }
   });
 }
@@ -158,6 +167,7 @@ export function animateRemoveChip(tabId) {
   if (!chip) return;
   chip.classList.add('tabChip--leaving');
   currentTabs.delete(tabId);
+  refreshDuplicates();  // 立即刷新（视觉上 chip 正在淡出，但 badge 已更新）
   setTimeout(() => {
     const card = chip.closest('.domainCard');
     chip.remove();
@@ -319,6 +329,90 @@ export function applyTimeSnapshot(snapshot) {
     if (!host) return;
     const total = byHost.get(host) || 0;
     updateCardTime(card, total);
+  });
+}
+
+/**
+ * 获取指定域名下应被关闭的重复 tab ID 列表。
+ * 同一归一化 URL 保留 firstSeen 最小（即 id 最小）的 tab，关闭其余。
+ * @param {string} [hostname] 可选，不传则返回全局所有应关闭的重复 tabId
+ * @returns {number[]}
+ */
+export function getDuplicateTabIds(hostname) {
+  const urlMap = buildDupeMap();
+  const toClose = [];
+  for (const ids of urlMap.values()) {
+    if (ids.length < 2) continue;
+    // 过滤到指定域名（如果提供）
+    if (hostname) {
+      const tab0 = currentTabs.get(ids[0]);
+      if (!tab0) continue;
+      const host = isHomepage(tab0.url) ? '__homepages' : getHostname(tab0.url);
+      if (host !== hostname) continue;
+    }
+    // 保留 id 最小的（通常是最早打开的），关闭其余
+    const sorted = [...ids].sort((a, b) => a - b);
+    for (let i = 1; i < sorted.length; i++) toClose.push(sorted[i]);
+  }
+  return toClose;
+}
+
+// ========== 重复标签检测 ==========
+
+/**
+ * 构建 normalizedUrl → [tabId, ...] 映射。
+ * @returns {Map<string, number[]>}
+ */
+function buildDupeMap() {
+  const urlMap = new Map();
+  for (const [id, info] of currentTabs) {
+    const norm = normalizeUrl(info.url);
+    if (!norm) continue;
+    if (!urlMap.has(norm)) urlMap.set(norm, []);
+    urlMap.get(norm).push(id);
+  }
+  return urlMap;
+}
+
+/**
+ * 全量刷新所有 chip 的重复 badge + 所有 domainCard 的"关闭重复"按钮。
+ * 每次 render / applyChange 后调用。
+ */
+function refreshDuplicates() {
+  if (!rootEl) return;
+  const urlMap = buildDupeMap();
+
+  // 反转：tabId → dupeCount（该 URL 出现次数）
+  const tabDupeCount = new Map();
+  for (const ids of urlMap.values()) {
+    for (const id of ids) tabDupeCount.set(id, ids.length);
+  }
+
+  // 1. 更新每个 chip 的重复 badge
+  const chips = rootEl.querySelectorAll('.tabChip');
+  chips.forEach((chip) => {
+    const id = Number(chip.getAttribute('data-tab-id'));
+    if (!Number.isFinite(id)) return;
+    updateDupeBadge(chip, tabDupeCount.get(id) || 0);
+  });
+
+  // 2. 按域名统计应关闭的重复数，更新 domainCard 按钮
+  const hostDupeClose = new Map();  // hostname → count of tabs to close
+  for (const [norm, ids] of urlMap) {
+    if (ids.length < 2) continue;
+    const tab0 = currentTabs.get(ids[0]);
+    if (!tab0) continue;
+    const host = isHomepage(tab0.url) ? '__homepages' : getHostname(tab0.url);
+    if (!host) continue;
+    // 该 URL 组要关闭的 = ids.length - 1（保留一个）
+    hostDupeClose.set(host, (hostDupeClose.get(host) || 0) + (ids.length - 1));
+  }
+
+  const cards = rootEl.querySelectorAll('.domainCard');
+  cards.forEach((card) => {
+    const host = card.getAttribute('data-hostname');
+    if (!host) return;
+    updateDupeButton(card, hostDupeClose.get(host) || 0);
   });
 }
 

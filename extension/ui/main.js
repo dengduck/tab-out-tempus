@@ -21,6 +21,8 @@ import * as header from './views/header.js';
 import * as historyView from './views/historyView.js';
 import * as sidebar from './views/sidebar.js';
 import * as settingsPanel from './views/settingsPanel.js';
+import * as privateModeWidget from './views/privateModeWidget.js';
+import * as focusTimerWidget from './views/focusTimerWidget.js';
 import { LOG_PREFIX } from '../shared/constants.js';
 import { $ } from './utils/dom.js';
 import { playSwoosh } from './utils/audio.js';
@@ -85,12 +87,14 @@ async function main() {
   const sidebarEl = $('#sidebar');
   sidebar.render(sidebarEl, savedResp?.saved || []);
 
-  // M9: 初始化设置面板
+  // M9: 初始化设置面板（只有 Blacklist）
   settingsPanel.init({
-    privateMode: state.privateMode ?? null,
-    focusTimer: state.focusTimer ?? null,
     blacklist: state.blacklist ?? [],
   });
+
+  // M9: Header 快捷控件
+  privateModeWidget.init(state.privateMode ?? null);
+  focusTimerWidget.init(state.focusTimer ?? null);
 
   // 事件委托
   tabsGrid.bindEvents(gridEl, {
@@ -142,6 +146,17 @@ async function main() {
         console.error(LOG_PREFIX, 'saveForLater failed', err);
       }
     },
+    onCloseDuplicates: async (hostname) => {
+      const ids = tabsGrid.getDuplicateTabIds(hostname);
+      if (ids.length === 0) return;
+      if (!confirm(`关闭 ${ids.length} 个重复标签页？（每组保留最早打开的）`)) return;
+      closeWithFx(ids, { pitch: 0.7, stagger: 30 });
+      try {
+        await Promise.all(ids.map((id) => messaging.closeTab(id)));
+      } catch (err) {
+        console.error(LOG_PREFIX, 'closeDuplicates failed', err);
+      }
+    },
   });
 
   // ========== 订阅：tab 增量 ==========
@@ -164,6 +179,10 @@ async function main() {
     // M8: 用 SW 的 isActive 真相，不从 activeTabId 推断（暂停时 activeTabId 仍非 null）
     const isActive = typeof payload.isActive === 'boolean' ? payload.isActive : (payload.activeTabId != null);
     header.updateTodayMs(payload.todayMs, isActive);
+
+    // M9: 刷新 header widget 的倒计时
+    privateModeWidget.tickUpdate();
+    focusTimerWidget.tickUpdate();
 
     // 节流：上一次 REQ 还没回来就跳过这一轮
     if (timesRefreshInFlight) return;
@@ -196,7 +215,9 @@ async function main() {
     });
     const count = document.querySelectorAll('.tabChip:not(.tabChip--leaving)').length;
     header.updateStatus(count, payload.pauseReasons || []);
-    // M9: 同步设置面板状态
+    // M9: 同步 header widget + 设置面板
+    privateModeWidget.update(payload.privateMode);
+    focusTimerWidget.update(payload.focusTimer);
     settingsPanel.updateState(payload);
   });
 

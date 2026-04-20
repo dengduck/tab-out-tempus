@@ -42,6 +42,12 @@ export function create(hostname, tabs) {
     ]),
     h('span', { class: 'domainCard__time', hidden: '' }),
     h('button', {
+      class: 'domainCard__closeDupes',
+      'data-action': 'close-duplicates',
+      'data-hostname': hostname,
+      hidden: '',
+    }, ['关闭重复']),
+    h('button', {
       class: 'domainCard__closeAll',
       'data-action': 'close-all',
       'data-hostname': hostname,
@@ -70,6 +76,24 @@ export function updateTime(cardEl, ms) {
   const text = formatDurationCompact(ms);
   if (timeEl.hidden) timeEl.hidden = false;
   if (timeEl.textContent !== text) timeEl.textContent = text;
+}
+
+/**
+ * 更新域名卡上"关闭重复"按钮的可见性和文案。
+ * @param {HTMLElement} cardEl .domainCard 根
+ * @param {number} dupeCount 该卡中重复的 tab 数（将被关闭的数量）
+ */
+export function updateDupeButton(cardEl, dupeCount) {
+  if (!cardEl) return;
+  const btn = cardEl.querySelector('.domainCard__closeDupes');
+  if (!btn) return;
+  if (typeof dupeCount !== 'number' || dupeCount < 1) {
+    if (!btn.hidden) btn.hidden = true;
+    return;
+  }
+  if (btn.hidden) btn.hidden = false;
+  const text = `关闭 ${dupeCount} 个重复`;
+  if (btn.textContent !== text) btn.textContent = text;
 }
 
 function faviconFallback() {
