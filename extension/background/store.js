@@ -1,18 +1,87 @@
 /**
  * background/store.js
  * --------------------
- * chrome.storage.local / session 的薄封装。
+ * chrome.storage.local / session 的薄封装（Promise 化 + 单一出入口）。
  *
- * 主要目的：
- *   - 统一异步接口（Promise）
- *   - 所有 key 必须来自 shared/constants.js 的 STORAGE_KEY（禁止硬编码字符串）
+ * 契约：
+ *   - 只导出 localGet/localSet/localRemove + sessionGet/sessionSet/sessionRemove
+ *   - 所有 key 必须来自 shared/constants.js 的 STORAGE_KEY（本文件不校验，依赖调用方自觉）
+ *   - 读取 undefined 时返回 null（而非 undefined），避免调用方 if/else 分叉
+ *   - 错误写 console.error 但不往外抛（存储挂了不能把 SW 拖死）
  *
- * 里程碑：M4 之前需要可用（TimeTracker 依赖它）。
+ * 里程碑：M4（TimeTracker 之前先有它）。
  */
 
-export async function localGet(_key) { /* stub */ }
-export async function localSet(_key, _value) { /* stub */ }
-export async function localRemove(_key) { /* stub */ }
+import { LOG_PREFIX } from '../shared/constants.js';
 
-export async function sessionGet(_key) { /* stub */ }
-export async function sessionSet(_key, _value) { /* stub */ }
+// ---------------- local ----------------
+
+export async function localGet(key) {
+  try {
+    const obj = await chrome.storage.local.get(key);
+    return obj[key] === undefined ? null : obj[key];
+  } catch (err) {
+    console.error(LOG_PREFIX, 'localGet failed', key, err);
+    return null;
+  }
+}
+
+export async function localSet(key, value) {
+  try {
+    await chrome.storage.local.set({ [key]: value });
+  } catch (err) {
+    console.error(LOG_PREFIX, 'localSet failed', key, err);
+  }
+}
+
+export async function localRemove(key) {
+  try {
+    await chrome.storage.local.remove(key);
+  } catch (err) {
+    console.error(LOG_PREFIX, 'localRemove failed', key, err);
+  }
+}
+
+/**
+ * 一次取多个 key。
+ * @param {string[]} keys
+ * @returns {Promise<Record<string, any>>} 不存在的 key 不会出现在返回值里
+ */
+export async function localGetMany(keys) {
+  try {
+    const obj = await chrome.storage.local.get(keys);
+    return obj || {};
+  } catch (err) {
+    console.error(LOG_PREFIX, 'localGetMany failed', keys, err);
+    return {};
+  }
+}
+
+// ---------------- session ----------------
+// 注意：MV3 的 chrome.storage.session 在 SW 重启时被清空，不能依赖它持久化真相数据。
+
+export async function sessionGet(key) {
+  try {
+    const obj = await chrome.storage.session.get(key);
+    return obj[key] === undefined ? null : obj[key];
+  } catch (err) {
+    console.error(LOG_PREFIX, 'sessionGet failed', key, err);
+    return null;
+  }
+}
+
+export async function sessionSet(key, value) {
+  try {
+    await chrome.storage.session.set({ [key]: value });
+  } catch (err) {
+    console.error(LOG_PREFIX, 'sessionSet failed', key, err);
+  }
+}
+
+export async function sessionRemove(key) {
+  try {
+    await chrome.storage.session.remove(key);
+  } catch (err) {
+    console.error(LOG_PREFIX, 'sessionRemove failed', key, err);
+  }
+}

@@ -215,4 +215,59 @@ extension/assets/
 
 ---
 
-_Last updated: 2026-04-20（M1 启动，追加 D12）_
+## D13. TimeTracker 事件路由独立于 tabRegistry（M4 落地，2026-04-20）
+
+**背景**：M2 里 tabRegistry 已经在 SW 端注册了 `chrome.tabs.onCreated/onUpdated/onRemoved` 用来广播 BCAST_TAB_CHANGE。M4 要把 tab 事件也接到 TimeTracker（`onActivateTab` / `onRemoveTab` / `onUpdateUrl`）。
+
+**决定**：**不复用** tabRegistry 的 listener 去分发给 TimeTracker。sw.js 在 bootstrap 时额外注册一份独立的 `chrome.tabs.onActivated/onRemoved/onUpdated` listener，专门喂给 TimeTracker。
+
+**理由**：
+- 分工清晰：tabRegistry = 元数据登记，TimeTracker = 时间追踪，**不共享 listener 降低耦合**
+- tabRegistry 不持有 TimeTracker 的引用，反之亦然；都只接收 sw.js 路由过来的调用
+- Chrome 允许多个 listener 注册同一事件，性能影响可忽略（同事件 O(2) 回调）
+- 未来如果 TimeTracker 的事件订阅策略变化（例如只对 active window 的 tab 响应），不会污染 tabRegistry
+
+**实现位置**：`background/sw.js::registerTabEventsForTracker()`。
+
+## D14. TimeTracker 测试走 DI，不依赖 chrome.tabs（M4 落地，2026-04-20）
+
+**决定**：`timeTracker.init({ nowProvider, tabInfoProvider, emit })` 接受三个可注入依赖。测试里：
+- `nowProvider` 注入可控时钟（不用 Date.now）
+- `tabInfoProvider` 注入假 tabInfo Map（不走 tabRegistry，也就不需要 mock `chrome.tabs.query`）
+- `emit` 注入 null（测试不验证广播）
+
+**理由**：
+- ES module 的 named export 不可覆盖（`import * as mod` 是只读 namespace），不能 monkey-patch tabRegistry.get
+- DI 让 timeTracker 单测化：mock chrome.storage + 注入两个函数就能跑
+- 生产代码零损耗：sw.js 传真 tabInfoProvider，行为等价
+
+**测试覆盖**（`extension/tests/timeTracker.test.js`）：15 个用例，已通过 Node 模拟运行（`/tmp/tempus-node-runner.mjs` 一次性脚本），覆盖 §9.2 全清单：基本累加、多窗口 focus、pauseReasons 多源叠加、Private Mode/黑名单 pause、SW 重启恢复（含 ALARM_PERIOD_S*2 上限）、URL 变更、单调性宏观断言（200 次随机事件序列）。
+
+## D15. "已关闭 tab 的 cumulative 归零"语义（M4 落地，2026-04-20）
+
+**背景**：`onRemoveTab(tabId)` 时除了 finalize 最后一段 slice，还会 `tabCumulativeMs.delete(tabId)`。
+
+**决定**：tab 关闭即从 cumulative Map 里清除该 tabId，前端再查 `getTabCumulativeMs` 会拿到 0。"永久真相"全部落在 timeLog。
+
+**理由**：
+- v2 的 cumulative 语义是"**当前 open 这一条 tab 从打开到现在的 lifetime**"——tab 关了就没有 open 的概念
+- 历史统计视图从 timeLog 取数据（slice 已 finalize 落盘），不受此影响
+- 避免 Map 无限膨胀（用户一天可能开关几百个 tab）
+- UI 端 BCAST_TAB_CHANGE 的 `removed` 事件会通知 UI 删除 chip，不会再去查 getTabCumulativeMs
+
+**反例**：v1 曾想让"关了 30s 再开同 URL"累计延续，导致需要持久化 tab lifetime 跨 tabId——那是个复杂度陷阱，v2 断然拒绝。
+
+## D16. `todayCache` 1 秒粗缓存，不做更精巧的失效（M4 落地，2026-04-20）
+
+**背景**：`getTodayTotalMs()` 被 BCAST_TICK 每秒调一次。内部要读 timeLog 做聚合，每秒一次 storage IO 浪费。
+
+**决定**：模块级 `todayCache = { ts, historicalMs }`，1 秒内直接复用；超过 1 秒重查 timeLog。不实现"当有新 slice 写入时主动失效缓存"这种复杂逻辑。
+
+**理由**：
+- timeLog 的 slice 通常 ≥ 几秒（finalize 发生在 tab 切换/pause 时），1 秒内新 slice 落盘但 cache 还没刷新 → 下一秒必然刷新，最多延迟 1s
+- 同等开销下写更简单的代码 > 炫技
+
+---
+
+_Last updated: 2026-04-20（M4 完成，追加 D13-D16）_
+

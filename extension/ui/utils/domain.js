@@ -12,31 +12,10 @@
  */
 
 import { HOMEPAGE_HOSTS } from '../../shared/constants.js';
+import { getHostname } from '../../shared/hostname.js';
 
-/**
- * 从 URL 提取分组用 hostname。
- *   - localhost 保留端口（localhost:3000 ≠ localhost:8080）
- *   - 其他 host 去除 www. 前缀
- *   - 非 http/https/file 返回空串（调用方过滤）
- * @param {string} url
- * @returns {string}
- */
-export function getHostname(url) {
-  if (!url || typeof url !== 'string') return '';
-  let u;
-  try {
-    u = new URL(url);
-  } catch {
-    return '';
-  }
-  if (!/^https?:|^file:/.test(u.protocol)) return '';
-  let host = u.hostname;
-  if (host === 'localhost' || host === '127.0.0.1') {
-    return u.port ? `${host}:${u.port}` : host;
-  }
-  if (host.startsWith('www.')) host = host.slice(4);
-  return host;
-}
+// 保持 ui/utils/domain.js 的对外 re-export，其他 UI 模块继续从这里 import
+export { getHostname };
 
 /**
  * 根路径判定：HOMEPAGE_HOSTS 的成员 且 path 是 "/" / "" / 常见首页路径。

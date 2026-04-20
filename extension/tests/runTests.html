@@ -15,21 +15,23 @@
 <body>
   <h1>Tab Out Tempus v2 — Test Runner</h1>
   <p class="info">
-    使用方式：chrome-extension://&lt;id&gt;/tests/runTests.html<br />
-    所有测试在浏览器 console 和下方结果区域输出。
+    推荐打开方式：在 chrome://extensions 里点"检查视图 tests/runTests.html"，<br />
+    或直接访问 chrome-extension://&lt;id&gt;/tests/runTests.html。<br />
+    也可在普通网页环境打开本文件（mockChrome.js 会注入最小 storage mock）。
   </p>
-  <div id="results"></div>
+  <div id="results" class="info">Loading tests…</div>
 
   <script type="module">
-    // M1 骨架版：测试用例还没写。M4 开始逐步导入：
-    //   import './timeTracker.test.js';
-    //   import './pauseReasons.test.js';
-    //   import './timeLog.test.js';
+    // Mock chrome.* (must import first; side-effect)
+    import './mockChrome.js';
+    import { run } from './testUtil.js';
+    import './timeTracker.test.js';
 
     const resultsEl = document.getElementById('results');
-    resultsEl.innerHTML = '<span class="info">（M1 骨架阶段：尚无测试用例。M4 开始会在 tests/ 目录下添加 .test.js 文件，' +
-      '在这里通过 import 注册并自动运行。）</span>';
-    console.log('[tempus] test runner loaded (M1 skeleton, no cases yet)');
+    resultsEl.classList.remove('info');
+    run(resultsEl).then(({ pass, fail }) => {
+      console.log(`[tempus test] ${pass} passed, ${fail} failed`);
+    });
   </script>
 </body>
 </html>
