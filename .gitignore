@@ -10,5 +10,8 @@ extension/config.local.js
 # AI agent working memory — local only
 .workbuddy/
 
+# Cross-review internal files — not for public repo
+docs/review/
+
 # Build artifacts — use git tag snapshots instead
 extension.zip

@@ -67,6 +67,8 @@ export function startPrivateMode(durationMin) {
 export function stopPrivateMode()    { return request(MSG.REQ_STOP_PRIVATE_MODE); }
 export function blacklistAdd(hostname)    { return request(MSG.REQ_BLACKLIST_ADD, { hostname }); }
 export function blacklistRemove(hostname) { return request(MSG.REQ_BLACKLIST_REMOVE, { hostname }); }
+export function getIdleThreshold()        { return request(MSG.REQ_GET_IDLE_THRESHOLD); }
+export function setIdleThreshold(threshold) { return request(MSG.REQ_SET_IDLE_THRESHOLD, { threshold }); }
 
 // ========== 订阅式（M4+ 启用） ==========
 

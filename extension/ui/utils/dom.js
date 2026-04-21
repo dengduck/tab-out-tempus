@@ -17,7 +17,6 @@ export function h(tag, attrs = {}, children = []) {
   for (const [k, v] of Object.entries(attrs)) {
     if (k === 'class' || k === 'className') el.className = v;
     else if (k === 'textContent') el.textContent = v;
-    else if (k === 'innerHTML') el.innerHTML = v;
     else if (k === 'style' && typeof v === 'object') Object.assign(el.style, v);
     else if (k.startsWith('on') && typeof v === 'function') el.addEventListener(k.slice(2).toLowerCase(), v);
     else if (v !== null && v !== undefined) el.setAttribute(k, v);

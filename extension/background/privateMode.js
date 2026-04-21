@@ -76,7 +76,13 @@ export async function stop() {
 export function getStatus() {
   if (endTime === null) return null;
   const remaining = endTime - Date.now();
-  if (remaining <= 0) return null;  // 已过期但 alarm 还没触发（极端情况）
+  if (remaining <= 0) {
+    // 已过期但 alarm 尚未触发（SW 休眠等极端情况） → 主动清理
+    endTime = null;
+    localRemove(STORAGE_KEY.PRIVATE_MODE).catch(() => {});
+    try { chrome.alarms.clear(ALARM_NAME); } catch (_) { /* ignore */ }
+    return null;
+  }
   return {
     active: true,
     endTime,

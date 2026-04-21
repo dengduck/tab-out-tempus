@@ -60,7 +60,7 @@ export async function start(durationMin, opts = {}) {
     startTime: now,
     endTime,
     durationMs,
-    strict: !!opts.strict,
+    strict: !!opts.strict,  // TODO M10+: implement strict mode (block non-whitelisted hostnames)
     allowedHosts: Array.isArray(opts.allowedHosts) ? opts.allowedHosts : [],
   };
 
@@ -88,7 +88,13 @@ export async function stop() {
 export function getStatus() {
   if (!state) return null;
   const remaining = state.endTime - Date.now();
-  if (remaining <= 0) return null;
+  if (remaining <= 0) {
+    // 过期但 alarm 尚未触发（SW 休眠等极端情况） → 主动清理
+    state = null;
+    localRemove(STORAGE_KEY.FOCUS_TIMER).catch(() => {});
+    try { chrome.alarms.clear(ALARM_NAME); } catch (_) { /* ignore */ }
+    return null;
+  }
   return {
     active: true,
     startTime: state.startTime,

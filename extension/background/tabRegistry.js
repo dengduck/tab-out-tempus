@@ -25,6 +25,8 @@ const tabs = new Map();
 /** @type {((msgType: string, payload: any) => void) | null} */
 let emit = null;
 
+let initialized = false;
+
 function toInfo(tab) {
   return {
     id: tab.id,
@@ -51,6 +53,8 @@ function broadcast(action, tabInfo) {
  * @param {{emit: (type: string, payload: any) => void}} deps
  */
 export async function init(deps = {}) {
+  if (initialized) return;
+  initialized = true;
   emit = deps.emit || null;
 
   // 初次灌满 map

@@ -27,13 +27,13 @@ import { localGet, localSet } from './store.js';
 
 // ========== UI 连接状态 ==========
 
-let hasActiveUIPort = false;
+let uiPortCount = 0;
 let tickIntervalId = null;
 
 // ========== 广播 ==========
 
 function broadcast(type, payload) {
-  if (!hasActiveUIPort) return;
+  if (uiPortCount <= 0) return;
   try {
     chrome.runtime.sendMessage({ type, payload }).catch(() => { /* no receivers */ });
   } catch (_) { /* ignore */ }
@@ -44,7 +44,7 @@ function startTickBroadcast() {
   // setInterval 在 SW 活跃期间有效；SW 睡了会停，但没 UI 的时候本来就不需要广播。
   // UI 存在 = 必有 port 在通讯 = SW 不会睡。
   tickIntervalId = setInterval(() => {
-    if (!hasActiveUIPort) return;
+    if (uiPortCount <= 0) return;
     const state = timeTracker.getTrackingState();
     const todayMs = timeTracker.getTodayTotalMs();
     const activeTabMs = state.activeTabId !== null
@@ -123,6 +123,10 @@ function registerTabEventsForTracker() {
       // M8: URL 变了也重新检查黑名单
       blacklist.checkTab(tabId);
     }
+    // D17 Bug 2: audible 状态变化时，让 idleGuard 重新评估
+    if ('audible' in changeInfo) {
+      idleGuard.reevaluateAudible();
+    }
   });
 }
 
@@ -153,13 +157,13 @@ async function handleRequest(message, _sender) {
 
   switch (message.type) {
     case MSG.REQ_UI_READY:
-      hasActiveUIPort = true;
+      uiPortCount++;
       startTickBroadcast();
       return { ok: true };
 
     case MSG.REQ_UI_GONE:
-      hasActiveUIPort = false;
-      stopTickBroadcast();
+      uiPortCount = Math.max(0, uiPortCount - 1);
+      if (uiPortCount === 0) stopTickBroadcast();
       return { ok: true };
 
     case MSG.REQ_GET_STATE:
@@ -297,6 +301,19 @@ async function handleRequest(message, _sender) {
       if (typeof hostname !== 'string' || !hostname) throw new Error('invalid hostname');
       await blacklist.remove(hostname);
       return { removed: hostname, list: blacklist.getList() };
+    }
+
+    // ===== M9: Idle Threshold =====
+
+    case MSG.REQ_GET_IDLE_THRESHOLD: {
+      return { threshold: idleGuard.getThreshold() };
+    }
+
+    case MSG.REQ_SET_IDLE_THRESHOLD: {
+      const sec = message.threshold;
+      if (typeof sec !== 'number' || sec < 0) throw new Error('invalid threshold');
+      await idleGuard.updateThreshold(sec);
+      return { threshold: idleGuard.getThreshold() };
     }
 
     default:

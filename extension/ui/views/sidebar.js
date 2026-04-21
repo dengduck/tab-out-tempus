@@ -35,6 +35,7 @@ export function render(el, savedList = []) {
   rootEl = el;
   if (!rootEl) return;
 
+  entryEls.clear();
   rootEl.textContent = '';  // 清掉 CSS ::before stub
   rootEl.classList.add('sidebar--active');
 

@@ -87,5 +87,6 @@ export function updateStatus(tabCount, pauseReasons = []) {
   if (!statusEl) statusEl = $('.header .status');
   if (!statusEl) return;
   const reasons = pauseReasons.length > 0 ? ` · ⏸ ${pauseReasons.join(',')}` : '';
-  statusEl.textContent = `v2.0.0 · ${tabCount} 个标签页${reasons}`;
+  const version = chrome.runtime?.getManifest?.()?.version || '2.0.0';
+  statusEl.textContent = `v${version} · ${tabCount} 个标签页${reasons}`;
 }

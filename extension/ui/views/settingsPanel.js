@@ -1,13 +1,13 @@
 /**
  * ui/views/settingsPanel.js
  * --------------------------
- * ⚙️ 设置面板：只包含 Blacklist（不计时域名）管理。
+ * ⚙️ 设置面板：Blacklist（不计时域名）管理 + Idle 阈值设置。
  *
  * Private Mode 和 Focus Timer 已移到 header 直接操作（M9 redesign）。
  *
  * 数据流：
  *   - 首帧：main.js 传入 blacklist 列表
- *   - 交互：用户输入 → messaging.blacklistAdd / blacklistRemove
+ *   - 交互：用户输入 → messaging.blacklistAdd / blacklistRemove / setIdleThreshold
  *   - 订阅：BCAST_STATE_CHANGE → updateState() 刷新列表
  *
  * 里程碑：M9。
@@ -15,7 +15,7 @@
 
 import { h } from '../utils/dom.js';
 import * as messaging from '../messaging.js';
-import { LOG_PREFIX } from '../../shared/constants.js';
+import { LOG_PREFIX, IDLE_THRESHOLD_DEFAULT_SEC } from '../../shared/constants.js';
 
 /** @type {HTMLElement|null} */
 let panelEl = null;
@@ -24,18 +24,38 @@ let toggleBtn = null;
 
 /** 当前黑名单 */
 let currentBlacklist = [];
+/** 当前 idle 阈值（秒），0 = 关闭 */
+let currentIdleThreshold = IDLE_THRESHOLD_DEFAULT_SEC;
+
+// D20 预设选项：值 → 标签
+const IDLE_OPTIONS = [
+  { value: 30,  label: '30 秒' },
+  { value: 60,  label: '1 分钟' },
+  { value: 180, label: '3 分钟（默认）' },
+  { value: 300, label: '5 分钟' },
+  { value: 600, label: '10 分钟' },
+  { value: 0,   label: '关闭' },
+];
 
 // ========== 初始化 ==========
 
 /**
  * @param {{blacklist?: string[]}} initialState
  */
-export function init(initialState = {}) {
+export async function init(initialState = {}) {
   toggleBtn = document.getElementById('settingsToggle');
   panelEl = document.getElementById('settingsPanel');
   if (!toggleBtn || !panelEl) return;
 
   currentBlacklist = initialState.blacklist ?? [];
+
+  // 获取当前 idle 阈值
+  try {
+    const { threshold } = await messaging.getIdleThreshold();
+    if (typeof threshold === 'number') {
+      currentIdleThreshold = threshold;
+    }
+  } catch (_) { /* use default */ }
 
   toggleBtn.addEventListener('click', () => {
     const isOpen = !panelEl.hidden;
@@ -64,8 +84,68 @@ export function updateState(state) {
 function renderPanel() {
   if (!panelEl) return;
   panelEl.innerHTML = '';
+  panelEl.appendChild(renderIdleThreshold());
   panelEl.appendChild(renderBlacklist());
 }
+
+// ---------- Idle 阈值 ----------
+
+function renderIdleThreshold() {
+  const section = h('div', { className: 'sp__section' });
+
+  const header = h('div', { className: 'sp__sectionHeader' });
+  header.appendChild(h('span', { className: 'sp__sectionIcon', textContent: '⏸️' }));
+  header.appendChild(h('span', { className: 'sp__sectionTitle', textContent: '空闲检测' }));
+  section.appendChild(header);
+
+  section.appendChild(h('p', {
+    className: 'sp__desc',
+    textContent: '键鼠空闲超过设定时间后自动暂停计时。看视频时自动豁免。',
+  }));
+
+  const row = h('div', { className: 'sp__actionRow' });
+  const select = h('select', { className: 'sp__select' });
+
+  for (const opt of IDLE_OPTIONS) {
+    const option = h('option', { value: String(opt.value), textContent: opt.label });
+    if (opt.value === currentIdleThreshold) {
+      option.selected = true;
+    }
+    select.appendChild(option);
+  }
+
+  // 如果当前值不在预设列表中（比如用户之前手动设了个 120s），显示自定义
+  const isPreset = IDLE_OPTIONS.some((o) => o.value === currentIdleThreshold);
+  if (!isPreset && currentIdleThreshold > 0) {
+    const custom = h('option', {
+      value: String(currentIdleThreshold),
+      textContent: `${currentIdleThreshold} 秒（自定义）`,
+    });
+    custom.selected = true;
+    select.appendChild(custom);
+  }
+
+  select.addEventListener('change', async () => {
+    const newVal = parseInt(select.value, 10);
+    if (isNaN(newVal)) return;
+    select.disabled = true;
+    try {
+      const { threshold } = await messaging.setIdleThreshold(newVal);
+      currentIdleThreshold = threshold;
+    } catch (err) {
+      console.error(LOG_PREFIX, 'setIdleThreshold failed', err);
+    } finally {
+      select.disabled = false;
+    }
+  });
+
+  row.appendChild(select);
+  section.appendChild(row);
+
+  return section;
+}
+
+// ---------- Blacklist ----------
 
 function renderBlacklist() {
   const section = h('div', { className: 'sp__section' });
@@ -121,6 +201,8 @@ function renderBlacklist() {
           await messaging.blacklistRemove(hostname);
         } catch (err) {
           console.error(LOG_PREFIX, 'blacklistRemove failed', err);
+        } finally {
+          removeBtn.disabled = false;
         }
       });
       item.appendChild(removeBtn);
