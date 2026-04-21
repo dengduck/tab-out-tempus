@@ -1,10 +1,10 @@
 **语言：** [English](README.md) | 简体中文
 
-# Tab Out Tempus
+# Tabpus
 
 **掌控你的标签页。**
 
-Tab Out Tempus 是一个 Chrome 新标签页扩展，将所有打开的标签页按域名分组展示在一个简洁的仪表盘上。Homepages（Gmail、X、LinkedIn 等）自动归入专属分组。关闭标签时有动听的音效和彩纸特效。
+Tabpus 是一个 Chrome 新标签页扩展，将所有打开的标签页按域名分组展示在一个简洁的仪表盘上。Homepages（Gmail、X、LinkedIn 等）自动归入专属分组。关闭标签时有动听的音效和彩纸特效。
 
 无服务器。无账号。无外部请求。纯 Chrome 扩展。
 
@@ -15,7 +15,7 @@ Tab Out Tempus 是一个 Chrome 新标签页扩展，将所有打开的标签页
 把这个仓库链接发给你的 AI 助手（Claude Code、Codex 等），然后说 **"帮我安装这个"**：
 
 ```
-https://github.com/dengduck/tab-out-tempus
+https://github.com/dengduck/tabpus
 ```
 
 AI 会一步步指导你，大约 1 分钟搞定。
@@ -61,7 +61,7 @@ AI 会一步步指导你，大约 1 分钟搞定。
 **1. 克隆仓库**
 
 ```bash
-git clone https://github.com/dengduck/tab-out-tempus.git
+git clone https://github.com/dengduck/tabpus.git
 ```
 
 **2. 加载 Chrome 扩展**
@@ -73,7 +73,7 @@ git clone https://github.com/dengduck/tab-out-tempus.git
 
 **3. 打开新标签页**
 
-你会看到 Tab Out Tempus。
+你会看到 Tabpus。
 
 ---
 
@@ -81,7 +81,7 @@ git clone https://github.com/dengduck/tab-out-tempus.git
 
 ```
 你打开一个新标签页
-  → Tab Out Tempus 展示所有标签，按域名分组
+  → Tabpus 展示所有标签，按域名分组
   → Homepages（Gmail、X 等）在顶部独立成组
   → 点击任意标签标题直接跳转
   → 关闭不需要的分组（音效 + 彩纸）
@@ -109,17 +109,20 @@ git clone https://github.com/dengduck/tab-out-tempus.git
 
 ## 致谢
 
-特别感谢 **[web-activity-time-tracker](https://github.com/brave-tools/web-activity-time-tracker)** —— 一个优秀的开源 Chrome 网页活动时间追踪扩展。Tab Out Tempus 与它**不共享任何代码**（技术栈完全不同：对方用 Vue/TypeScript，我们用原生 ES Module），但通过研究它的架构我们获得了宝贵的设计启发：
+Tabpus 站在两个开源项目的肩膀上：
+
+**[Tab Out](https://github.com/zarazhangrui/tab-out)**，作者 [Zara](https://x.com/zarazhangrui) —— 本项目的创意起源。Tabpus 最初是 Tab Out 的 fork：用域名分组取代默认新标签页的核心理念、swoosh + 彩纸的关闭动效、以及"稍后保存"的书签流程，都源自 Zara 的设计。此后 Tabpus 已**完全重写**（v2.0 —— 全新模块化架构，与 v1 零共享代码），但创意火花始于那里。感谢 Zara 以 MIT 许可证开源了这个项目。
+
+**[web-activity-time-tracker](https://github.com/brave-tools/web-activity-time-tracker)** —— 一个优秀的 Chrome 网页活动时间追踪扩展（Vue/TypeScript 技术栈，与我们的原生 ES Module 完全不同）。通过研究它的架构，我们在 v2 从零构建时间追踪层时获得了宝贵的设计启发：
 
 - `chrome.idle` API 的正确用法 + 对播放中音视频的豁免思路
 - 限时 block 的极简实现路径（通过 `chrome.tabs.update` 跳转到本地 block 页面，零额外权限）
-- 启发了我们的差异化方向 —— 对方做的是单域名限时，我们在此基础上延伸出**基于分类的组限额**（例如"娱乐"分类下多个网站共享一个每日预算）
 - 通过对照其架构，帮助我们锁定了**单一时间账本**模型（见 `docs/DECISIONS-v2.md` D17）
 
-感谢该项目坚持开源，让这种相互学习成为可能。
+感谢两个项目坚持开源，让这种相互学习成为可能。
 
 ---
 
 ## 许可证
 
-MIT 许可证。由 [Zara](https://x.com/zarazhangrui) 创建。[dengduck](https://github.com/dengduck/tab-out-tempus) 扩展 fork 为 **Tab Out Tempus**。
+MIT 许可证。由 [Zara](https://x.com/zarazhangrui) 最初创建为 [Tab Out](https://github.com/zarazhangrui/tab-out)。由 [dengduck](https://github.com/dengduck/tabpus) 重写并扩展为 **Tabpus**。

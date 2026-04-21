@@ -533,7 +533,7 @@ chrome.storage.session:
 
 **UI 视觉**：开启期间 Header 显示明显的"🔒 隐私模式 · 剩余 N 分钟"提示条，并改变主色调区分。
 
-**与对手的差异**：对手项目 `web-activity-time-tracker` 没有这个功能——他们只有"白名单"（= 我们的"不计时域名"）。Private Mode 是 v1 就有的 Tab Out Tempus 原生功能，v2 完整移植，见 `v1-feature-reference/private-mode.md`。
+**与对手的差异**：对手项目 `web-activity-time-tracker` 没有这个功能——他们只有"白名单"（= 我们的"不计时域名"）。Private Mode 是 v1 就有的 Tabpus 原生功能，v2 完整移植，见 `v1-feature-reference/private-mode.md`。
 
 **版本归属**：v2.0 M8。
 

@@ -1,14 +1,14 @@
-# Tab Out Tempus — Project Overview
+# Tabpus — Project Overview
 
-> **fork**: https://github.com/dengduck/tab-out-tempus
+> **fork**: https://github.com/dengduck/tabpus
 > **upstream**: https://github.com/zarazhangrui/tab-out
 > **工作目录**: `/Users/jundeng/WorkBuddy/20260418032939/tab-out`
 
 ---
 
-## 什么是 Tab Out Tempus
+## 什么是 Tabpus
 
-Tab Out Tempus 是一个 Chrome 新标签页扩展，用域名分组的方式展示用户所有打开的标签页。内置关闭动画、重复标签检测、"稍后保存"、历史统计等功能。所有数据完全存储在本地（`chrome.storage.local`），无服务器、无账号、无外部 API 调用。
+Tabpus 是一个 Chrome 新标签页扩展，用域名分组的方式展示用户所有打开的标签页。内置关闭动画、重复标签检测、"稍后保存"、历史统计等功能。所有数据完全存储在本地（`chrome.storage.local`），无服务器、无账号、无外部 API 调用。
 
 ---
 
@@ -34,7 +34,7 @@ Tab Out Tempus 是一个 Chrome 新标签页扩展，用域名分组的方式展
 ## 文件结构
 
 ```
-tab-out-tempus/
+tabpus/
 ├── extension/
 │   ├── index.html      # 主页面（Dashboard UI 结构）
 │   ├── app.js          # 前端逻辑：渲染、交互、视图切换 (≈2900 行)

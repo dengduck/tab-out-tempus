@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to **Tab Out Tempus** (our fork with custom features) are documented here.
+All notable changes to **Tabpus** are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
@@ -8,15 +8,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 Complete rewrite with modular architecture. See `docs/REWRITE-PLAN-v2.md` and `docs/DECISIONS-v2.md` for details.
 
+### Changed
+- **Project rebrand: Tab Out Tempus → Tabpus** — New independent brand name across all files (manifest, HTML, README, docs, AGENTS).
+- **GitHub repo renamed**: `dengduck/tab-out-tempus` → `dengduck/tabpus`.
+
 ### Acknowledgments
-- Design insights (especially around `chrome.idle` usage, per-domain time limits, and the single time ledger architecture) were inspired by [**web-activity-time-tracker**](https://github.com/brave-tools/web-activity-time-tracker). No code was copied — we reimplemented everything in vanilla ES Modules — but cross-referencing their architecture was invaluable. See `docs/DECISIONS-v2.md` D23 for details.
+- Originally forked from [**Tab Out**](https://github.com/zarazhangrui/tab-out) by Zara — the core concept (domain-grouped new tab dashboard, swoosh + confetti close animation, save-for-later) originated there. Tabpus v2 is a complete rewrite with zero shared code.
+- Design insights for the time-tracking layer (especially around `chrome.idle` usage, per-domain time limits, and the single time ledger architecture) were informed by [**web-activity-time-tracker**](https://github.com/brave-tools/web-activity-time-tracker). No code was copied — we reimplemented everything in vanilla ES Modules. See `docs/DECISIONS-v2.md` D23 for details.
 
 ---
 
 ## [1.3.0] — 2026-04-19
 
 ### Changed
-- **Project rename: Tab Out → Tab Out Tempus** — Full rebrand across all files:
+- **Project rename: Tab Out → Tab Out Tempus** (later rebranded to Tabpus in v2.0) — Full rebrand across all files:
   - Extension name in `manifest.json` (name + default_title)
   - HTML `<title>` and footer attribution in `index.html`
   - All user-visible text (banners, toasts, i18n strings) in `app.js`

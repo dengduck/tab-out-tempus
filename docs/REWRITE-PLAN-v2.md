@@ -1,4 +1,4 @@
-# Tab Out Tempus v2 — 重写启动方案
+# Tabpus v2 — 重写启动方案
 
 > 决策日期：2026-04-20  
 > 触发原因：v1.3.3→1.3.5 迭代中反复踩时间逻辑 bug，根因是 app.js / background.js 耦合过重，没有模块边界。  

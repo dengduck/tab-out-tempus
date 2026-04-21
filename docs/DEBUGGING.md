@@ -1,4 +1,4 @@
-# Tab Out Tempus — Debugging Guide & Known Issues
+# Tabpus — Debugging Guide & Known Issues
 
 > 本文档记录开发过程中遇到的实际 Bug、根因分析、调试方法和经验教训。
 
@@ -108,7 +108,7 @@ function renderStatsView(stats, range) {
 
 ### 2. 标签页关闭后 Dashboard 不自动刷新
 
-**描述**：用户通过 Tab Out Tempus 关闭标签后，Dashboard 不会立即更新。
+**描述**：用户通过 Tabpus 关闭标签后，Dashboard 不会立即更新。
 
 **当前行为**：需要打开新标签页（触发页面重新加载）才能看到最新状态
 
@@ -116,9 +116,9 @@ function renderStatsView(stats, range) {
 
 ---
 
-### 3. 重复 Tab Out Tempus 标签页检测有时失效
+### 3. 重复 Tabpus 标签页检测有时失效
 
-**描述**：用户可能同时打开多个 Tab Out Tempus 新标签页，`checkTempusDupes()` 逻辑存在边界情况。
+**描述**：用户可能同时打开多个 Tabpus 新标签页，`checkTempusDupes()` 逻辑存在边界情况。
 
 **位置**：`app.js` `checkTempusDupes()` 函数
 
@@ -155,7 +155,7 @@ chrome.storage.local.get(null, items => {
 
 ### Chrome 扩展调试
 - 打开 `chrome://extensions`
-- 找到 Tab Out Tempus，点击 "Service Worker" 链接查看 background.js 日志
+- 找到 Tabpus，点击 "Service Worker" 链接查看 background.js 日志
 - 点击 "打开扩展的页面" 查看 popup/index.html 日志
 - 使用 `chrome.storage.local.get(...)` 在 Console 验证数据
 

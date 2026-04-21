@@ -1,6 +1,6 @@
-# Tab Out Tempus — Developer Guide
+# Tabpus — Developer Guide
 
-> 本文档面向参与 Tab Out Tempus 开发的 AI Agent 和人类开发者。记录开发流程、Git 策略、代码规范和注意事项。
+> 本文档面向参与 Tabpus 开发的 AI Agent 和人类开发者。记录开发流程、Git 策略、代码规范和注意事项。
 
 ---
 
@@ -9,8 +9,8 @@
 ### 1. 克隆仓库
 
 ```bash
-git clone https://github.com/dengduck/tab-out-tempus.git
-cd tab-out-tempus
+git clone https://github.com/dengduck/tabpus.git
+cd tabpus
 ```
 
 ### 2. 安装 Chrome 扩展
@@ -32,12 +32,12 @@ open "chrome://extensions"
 
 ### 3. 验证安装
 
-打开新标签页，应能看到 Tab Out Tempus 界面。关闭 Chrome 扩展页，再次打开新标签页即可。
+打开新标签页，应能看到 Tabpus 界面。关闭 Chrome 扩展页，再次打开新标签页即可。
 
 ### 4. 调试
 
-- **前端日志**：`chrome://extensions` → Tab Out Tempus → "打开扩展的页面"
-- **SW 日志**：`chrome://extensions` → Tab Out Tempus → "Service Worker" 链接
+- **前端日志**：`chrome://extensions` → Tabpus → "打开扩展的页面"
+- **SW 日志**：`chrome://extensions` → Tabpus → "Service Worker" 链接
 
 ---
 
@@ -60,8 +60,8 @@ git remote add upstream https://github.com/zarazhangrui/tab-out.git
 
 # 确认 remote 配置
 git remote -v
-# origin   https://github.com/dengduck/tab-out-tempus.git (fetch)
-# origin   https://github.com/dengduck/tab-out-tempus.git (push)
+# origin   https://github.com/dengduck/tabpus.git (fetch)
+# origin   https://github.com/dengduck/tabpus.git (push)
 # upstream https://github.com/zarazhangrui/tab-out.git (fetch)
 # upstream https://github.com/zarazhangrui/tab-out.git (push)
 
@@ -208,7 +208,7 @@ if (view === 'today') {
 
 ### ⚠️ 不要修改工作区文件夹名称
 
-如果使用 WorkBuddy 等工具，**不要修改包含 tab-out-tempus 的工作区文件夹名称**，否则工具链可能失效。
+如果使用 WorkBuddy 等工具，**不要修改包含 tabpus 的工作区文件夹名称**，否则工具链可能失效。
 
 ---
 
@@ -286,5 +286,5 @@ git diff our-features..main
 - [Chrome Manifest V3 文档](https://developer.chrome.com/docs/extensions/mv3/)
 - [chrome.storage API](https://developer.chrome.com/docs/extensions/reference/api/storage)
 - [chrome.tabs API](https://developer.chrome.com/docs/extensions/reference/api/tabs)
-- [Tab Out Tempus 上游仓库](https://github.com/zarazhangrui/tab-out)
-- [Tab Out Tempus Fork 仓库](https://github.com/dengduck/tab-out-tempus)
+- [Tabpus 上游仓库](https://github.com/zarazhangrui/tab-out)
+- [Tabpus Fork 仓库](https://github.com/dengduck/tabpus)

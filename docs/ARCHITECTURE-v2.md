@@ -1,4 +1,4 @@
-# Tab Out Tempus v2 — 架构设计
+# Tabpus v2 — 架构设计
 
 > 本文档是 v2 rewrite 的**设计真相源**。动手前先读它，动手中发现不对先改它，再改代码。
 
@@ -484,7 +484,7 @@ historyView.onOpen(async (range) => {
 
 邓老师用法：
 ```
-1. 在 chrome://extensions 里点 Tab Out Tempus v2 的 "检查视图 index.html"
+1. 在 chrome://extensions 里点 Tabpus v2 的 "检查视图 index.html"
 2. Console 里 import('./tests/runTests.html')，或者直接打开 chrome-extension://<id>/tests/runTests.html
 3. 看 console 输出 PASS/FAIL
 ```

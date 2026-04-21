@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Tab Out Tempus",
+  "name": "Tabpus",
   "version": "2.0.0",
   "description": "Keep tabs on your tabs. New tab page that groups your open tabs by domain, tracks per-tab lifetime, and lets you close them with style.",
   "permissions": ["tabs", "activeTab", "storage", "sessions", "alarms", "idle"],
@@ -10,7 +10,7 @@
     "type": "module"
   },
   "action": {
-    "default_title": "Tab Out Tempus",
+    "default_title": "Tabpus",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png"

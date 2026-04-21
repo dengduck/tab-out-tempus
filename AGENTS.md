@@ -1,6 +1,6 @@
-# AGENTS.md -- Tab Out Tempus: Setup & Onboarding Guide for Coding Agents
+# AGENTS.md -- Tabpus: Setup & Onboarding Guide for Coding Agents
 
-You're installing **Tab Out Tempus** (extended fork by [dengduck](https://github.com/dengduck/tab-out-tempus)) for the user. This fork adds history stats views (Today/Week/Month/Year), per-domain timer badges, productivity banners, and more. Your job is not just to set it up -- it's to get them excited about using it.
+You're installing **Tabpus** (by [dengduck](https://github.com/dengduck/tabpus)) for the user. This extension replaces the new tab page with a dashboard that groups tabs by domain, tracks per-domain browsing time, and lets you close tabs with style. Your job is not just to set it up -- it's to get them excited about using it.
 
 ---
 
@@ -8,7 +8,7 @@ You're installing **Tab Out Tempus** (extended fork by [dengduck](https://github
 
 Before doing anything technical, tell the user what they're about to get:
 
-> **Tab Out Tempus** replaces your new tab page with a clean dashboard of everything you have open, grouped by domain.
+> **Tabpus** replaces your new tab page with a clean dashboard of everything you have open, grouped by domain.
 >
 > Here's what makes it great:
 > - **See all your open tabs at a glance** grouped by domain on a grid
@@ -26,8 +26,8 @@ Before doing anything technical, tell the user what they're about to get:
 ## Step 1 -- Clone the repo
 
 ```bash
-git clone https://github.com/dengduck/tab-out-tempus.git
-cd tab-out-tempus
+git clone https://github.com/dengduck/tabpus.git
+cd tabpus
 ```
 
 ---
@@ -60,7 +60,7 @@ open "chrome://extensions"
 > 3. A file picker will open. **Press Cmd+Shift+G** (Mac) or **Ctrl+L** (Windows/Linux) to open the "Go to folder" bar, then **paste** the path I copied (Cmd+V / Ctrl+V) and press Enter.
 > 4. Click **"Select"** or **"Open"** and the extension will install.
 >
-> You should see "Tab Out Tempus" appear in your extensions list.
+> You should see "Tabpus" appear in your extensions list.
 
 **Also**, open the file browser directly to the extension folder as a fallback:
 - macOS: `open extension/`
@@ -73,7 +73,7 @@ open "chrome://extensions"
 
 Once the extension is loaded:
 
-> You're all set! Open a **new tab** and you'll see Tab Out Tempus.
+> You're all set! Open a **new tab** and you'll see Tabpus.
 >
 > Here's how it works:
 > 1. **Your open tabs are grouped by domain** in a grid layout.
@@ -90,7 +90,7 @@ Once the extension is loaded:
 
 ## Key Facts
 
-- Tab Out Tempus is a pure Chrome extension. No server, no Node.js, no npm.
+- Tabpus is a pure Chrome extension. No server, no Node.js, no npm.
 - Saved tabs are stored in `chrome.storage.local` (persists across sessions).
 - 100% local. No data is sent to any external service.
-- To update: `cd tab-out && git pull`, then reload the extension in `chrome://extensions`.
+- To update: `cd tabpus && git pull`, then reload the extension in `chrome://extensions`.

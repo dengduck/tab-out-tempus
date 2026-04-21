@@ -1,10 +1,10 @@
 **Language:** English | [简体中文](README.zh-CN.md)
 
-# Tab Out Tempus
+# Tabpus
 
 **Keep tabs on your tabs.**
 
-Tab Out Tempus is a Chrome extension that replaces your new tab page with a dashboard of everything you have open. Tabs are grouped by domain, with homepages (Gmail, X, LinkedIn, etc.) pulled into their own group. Close tabs with a satisfying swoosh + confetti.
+Tabpus is a Chrome extension that replaces your new tab page with a dashboard of everything you have open. Tabs are grouped by domain, with homepages (Gmail, X, LinkedIn, etc.) pulled into their own group. Close tabs with a satisfying swoosh + confetti.
 
 No server. No account. No external API calls. Just a Chrome extension.
 
@@ -15,7 +15,7 @@ No server. No account. No external API calls. Just a Chrome extension.
 Send your coding agent (Claude Code, Codex, etc.) this repo and say **"install this"**:
 
 ```
-https://github.com/dengduck/tab-out-tempus
+https://github.com/dengduck/tabpus
 ```
 
 The agent will walk you through it. Takes about 1 minute.
@@ -61,7 +61,7 @@ The agent will walk you through it. Takes about 1 minute.
 **1. Clone the repo**
 
 ```bash
-git clone https://github.com/dengduck/tab-out-tempus.git
+git clone https://github.com/dengduck/tabpus.git
 ```
 
 **2. Load the Chrome extension**
@@ -73,7 +73,7 @@ git clone https://github.com/dengduck/tab-out-tempus.git
 
 **3. Open a new tab**
 
-You'll see Tab Out Tempus.
+You'll see Tabpus.
 
 ---
 
@@ -81,7 +81,7 @@ You'll see Tab Out Tempus.
 
 ```
 You open a new tab
-  -> Tab Out Tempus shows your open tabs grouped by domain
+  -> Tabpus shows your open tabs grouped by domain
   -> Homepages (Gmail, X, etc.) get their own group at the top
   -> Click any tab title to jump to it
   -> Close groups you're done with (swoosh + confetti)
@@ -109,17 +109,20 @@ Everything runs inside the Chrome extension. No external server, no API calls, n
 
 ## Acknowledgments
 
-Special thanks to **[web-activity-time-tracker](https://github.com/brave-tools/web-activity-time-tracker)** — an excellent open-source Chrome extension for web activity time tracking. While Tab Out Tempus shares **no code** with it (different stacks: they use Vue/TypeScript, we use vanilla ES Modules), studying its architecture gave us valuable design insights:
+Tabpus stands on the shoulders of two open-source projects:
+
+**[Tab Out](https://github.com/zarazhangrui/tab-out)** by [Zara](https://x.com/zarazhangrui) — the original Chrome new-tab extension that inspired this project. Tabpus began as a fork of Tab Out: the core idea of replacing your new tab page with a domain-grouped tab dashboard, the swoosh + confetti close animation, and the "save for later" bookmark flow all trace back to Zara's design. Since then Tabpus has been **completely rewritten** (v2.0 — new modular architecture, zero shared code with v1), but the creative spark started there. Thank you, Zara, for open-sourcing it under the MIT license.
+
+**[web-activity-time-tracker](https://github.com/brave-tools/web-activity-time-tracker)** — an excellent Chrome extension for web activity time tracking (Vue/TypeScript stack, completely different from our vanilla ES Modules). Studying its architecture gave us valuable design insights for the time-tracking layer we built from scratch in v2:
 
 - Correct usage patterns for `chrome.idle` API with audible-media exceptions
 - A minimal implementation path for per-domain time limits (via `chrome.tabs.update` to a local block page, zero extra permissions)
-- Inspired our differentiation direction — while they implement per-domain limits, we extend this to **category-based group budgets** (e.g. a unified daily budget for "entertainment" covering multiple sites)
 - Cross-referencing their architecture helped us lock in our **single time ledger model** (see `docs/DECISIONS-v2.md` D17)
 
-We're grateful for the project being open-source, which made this kind of cross-learning possible.
+We're grateful for both projects being open-source, which made this kind of cross-learning possible.
 
 ---
 
 ## License
 
-MIT License. Built by [Zara](https://x.com/zarazhangrui). Extended fork by [dengduck](https://github.com/dengduck/tab-out-tempus) as **Tab Out Tempus**.
+MIT License. Originally created by [Zara](https://x.com/zarazhangrui) as [Tab Out](https://github.com/zarazhangrui/tab-out). Rewritten and extended by [dengduck](https://github.com/dengduck/tabpus) as **Tabpus**.
