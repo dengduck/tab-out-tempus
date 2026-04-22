@@ -15,12 +15,27 @@
  */
 
 import { LOG_PREFIX, IDLE_THRESHOLD_DEFAULT_SEC, STORAGE_KEY } from '../shared/constants.js';
+import { MSG } from '../shared/messages.js';
 import { localGet, localSet } from './store.js';
 import * as timeTracker from './timeTracker.js';
 
 let initialized = false;
 let currentState = 'active';
 let effectiveThreshold = IDLE_THRESHOLD_DEFAULT_SEC;
+
+/** @type {((msgType: string, payload: any) => void) | null} */
+let emit = null;
+
+/** M10(P1-10): 状态变化后立即广播，消除 1s 延迟 */
+function broadcastStateChange() {
+  if (typeof emit !== 'function') return;
+  try {
+    const state = timeTracker.getTrackingState();
+    emit(MSG.BCAST_STATE_CHANGE, {
+      pauseReasons: state.pauseReasons,
+    });
+  } catch (_) { /* ignore */ }
+}
 
 /**
  * 查询当前焦点窗口的 active tab 是否正在播放声音。
@@ -35,9 +50,10 @@ async function isActiveTabAudible() {
   }
 }
 
-export async function init() {
+export async function init(deps = {}) {
   if (initialized) return;
   initialized = true;
+  emit = deps.emit || null;
 
   // D20：读取用户配置的阈值（如果有）
   // P0-02 fix: 增加 userThreshold===0 分支，恢复"关闭"设置
@@ -60,9 +76,11 @@ export async function init() {
     currentState = state;
     if (state === 'active') {
       timeTracker.resume('idle');
+      broadcastStateChange();
     } else if (state === 'locked') {
       // 锁屏 = 一定暂停，不做 audible 豁免
       timeTracker.pause('idle');
+      broadcastStateChange();
     } else {
       // state === 'idle'：键鼠空闲，但要检查是否在看视频
       const audible = await isActiveTabAudible();
@@ -72,6 +90,7 @@ export async function init() {
         return;
       }
       timeTracker.pause('idle');
+      broadcastStateChange();
     }
   });
 
@@ -108,9 +127,11 @@ export async function reevaluateAudible() {
     // tab 开始播放声音了 → 解除 idle 暂停
     console.log(LOG_PREFIX, 'active tab became audible during idle — resuming');
     timeTracker.resume('idle');
+    broadcastStateChange();
   } else if (!audible && !timeTracker.getTrackingState().pauseReasons.includes('idle')) {
     // tab 停止播放声音了 → 重新应用 idle 暂停
     timeTracker.pause('idle');
+    broadcastStateChange();
   }
 }
 
@@ -132,6 +153,7 @@ export async function updateThreshold(sec) {
   if (sec === 0) {
     // "关闭" idle 检测：先恢复可能存在的 idle pause，然后把阈值设到最大
     timeTracker.resume('idle');
+    broadcastStateChange();
     effectiveThreshold = 0;
     await localSet(STORAGE_KEY.CONFIG_IDLE_THRESHOLD_SEC, 0);
     // Chrome API 不支持真正关闭 idle，设一个超长阈值（24 小时）近似关闭

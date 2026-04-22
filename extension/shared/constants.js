@@ -57,3 +57,6 @@ export const SCHEMA_VERSION = 2;
 
 /** 日志前缀，方便 console 过滤。 */
 export const LOG_PREFIX = '[tempus]';
+
+/** 1×1 透明 GIF data URI——favicon 加载失败时的 fallback。 */
+export const FAVICON_FALLBACK = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';

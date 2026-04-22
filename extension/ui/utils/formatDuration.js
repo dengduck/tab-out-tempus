@@ -35,10 +35,9 @@ export function formatDuration(ms, opts = {}) {
   const s = totalSec % 60;
 
   if (allowSeconds) {
-    // 带秒的完整格式
-    if (h > 0 && m > 0) return locale === 'en' ? `${h}h ${m}m ${s}s` : `${h} 小时 ${m} 分 ${s} 秒`;
-    if (h > 0)          return locale === 'en' ? `${h}h ${s}s`       : `${h} 小时 ${s} 秒`;
-    if (m > 0)          return locale === 'en' ? `${m}m ${s}s`       : `${m} 分 ${s} 秒`;
+    // 带秒的完整格式（M10 P1-19: h>0 时始终显示分钟位，不跳过 0m）
+    if (h > 0) return locale === 'en' ? `${h}h ${m}m ${s}s` : `${h} 小时 ${m} 分 ${s} 秒`;
+    if (m > 0) return locale === 'en' ? `${m}m ${s}s`       : `${m} 分 ${s} 秒`;
     return locale === 'en' ? `${s}s` : `${s} 秒`;
   }
 

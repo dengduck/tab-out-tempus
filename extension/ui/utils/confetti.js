@@ -61,6 +61,8 @@ function resize() {
  */
 export function burst(x, y, opts = {}) {
   ensureCanvas();
+  // M10(P1-17): 粒子上限守卫——防止连续快速关闭大量 tab 导致粒子暴涨卡顿
+  if (particles.length > 500) return;
   const count = opts.count ?? 28;
   const power = opts.power ?? 1;
   // spread 0~1：1 = 全向四散；0 = 都朝上

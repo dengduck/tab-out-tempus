@@ -19,6 +19,7 @@
 import { h } from '../utils/dom.js';
 import { create as createChip } from './tabChip.js';
 import { formatDurationCompact } from '../utils/formatDuration.js';
+import { FAVICON_FALLBACK } from '../../shared/constants.js';
 
 /**
  * @param {string} hostname
@@ -32,9 +33,9 @@ export function create(hostname, tabs) {
   const head = h('header', { class: 'domainCard__head' }, [
     h('img', {
       class: 'domainCard__favicon',
-      src: tabs[0]?.favIconUrl || faviconFallback(),
+      src: tabs[0]?.favIconUrl || FAVICON_FALLBACK,
       alt: '',
-      onerror: (e) => { e.target.src = faviconFallback(); },
+      onerror: (e) => { e.target.src = FAVICON_FALLBACK; },
     }),
     h('h3', { class: 'domainCard__title' }, [
       hostname,
@@ -96,6 +97,3 @@ export function updateDupeButton(cardEl, dupeCount) {
   if (btn.textContent !== text) btn.textContent = text;
 }
 
-function faviconFallback() {
-  return 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
-}

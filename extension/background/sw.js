@@ -93,7 +93,7 @@ async function bootstrap() {
     await focusModel.init();
 
     // 5. idleGuard (D20: async — reads user config for idle threshold)
-    await idleGuard.init();
+    await idleGuard.init({ emit: broadcast });
 
     // 6. M8 模块（依赖 timeTracker 已 init）
     await privateMode.init({ emit: broadcast });
@@ -120,8 +120,12 @@ function registerTabEventsForTracker() {
   chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     if (changeInfo.url) {
       timeTracker.onUpdateUrl(tabId, '', changeInfo.url);
-      // M8: URL 变了也重新检查黑名单
-      blacklist.checkTab(tabId);
+      // M8+M10(P0-08): URL 变了重新检查黑名单，但只对 active tab
+      // 非 active tab 的 URL 变化不影响计时状态（下次 activate 会重新检查）
+      const state = timeTracker.getTrackingState();
+      if (state.activeTabId === tabId) {
+        blacklist.checkTab(tabId);
+      }
     }
     // D17 Bug 2: audible 状态变化时，让 idleGuard 重新评估
     if ('audible' in changeInfo) {

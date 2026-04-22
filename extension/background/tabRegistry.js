@@ -17,7 +17,7 @@
 import { LOG_PREFIX } from '../shared/constants.js';
 import { MSG } from '../shared/messages.js';
 
-/** @typedef {{id:number,url:string,title:string,favIconUrl:string,windowId:number,firstSeen:number}} TabInfo */
+/** @typedef {import('../shared/types.js').TabInfo} TabInfo */
 
 /** @type {Map<number, TabInfo>} */
 const tabs = new Map();

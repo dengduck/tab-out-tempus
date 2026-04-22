@@ -45,15 +45,22 @@ export async function localRemove(key) {
 /**
  * 一次取多个 key。
  * @param {string[]} keys
- * @returns {Promise<Record<string, any>>} 不存在的 key 不会出现在返回值里
+ * @returns {Promise<Record<string, any>>} 缺失的 key 映射为 null（与 localGet 一致）
  */
 export async function localGetMany(keys) {
   try {
     const obj = await chrome.storage.local.get(keys);
-    return obj || {};
+    // M10(P2-30): 统一行为——缺失的 key 映射为 null，与 localGet 一致
+    const result = {};
+    for (const k of keys) {
+      result[k] = obj[k] === undefined ? null : obj[k];
+    }
+    return result;
   } catch (err) {
     console.error(LOG_PREFIX, 'localGetMany failed', keys, err);
-    return {};
+    const result = {};
+    for (const k of keys) result[k] = null;
+    return result;
   }
 }
 

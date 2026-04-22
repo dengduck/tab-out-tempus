@@ -20,6 +20,7 @@
 
 import { h } from '../utils/dom.js';
 import { formatDurationCompact } from '../utils/formatDuration.js';
+import { FAVICON_FALLBACK } from '../../shared/constants.js';
 
 /**
  * @param {{id:number,url:string,title:string,favIconUrl?:string,windowId:number}} tabInfo
@@ -28,9 +29,9 @@ import { formatDurationCompact } from '../utils/formatDuration.js';
 export function create(tabInfo) {
   const favicon = h('img', {
     class: 'tabChip__favicon',
-    src: tabInfo.favIconUrl || defaultFaviconFor(tabInfo.url),
+    src: tabInfo.favIconUrl || FAVICON_FALLBACK,
     alt: '',
-    onerror: (e) => { e.target.src = defaultFaviconFor(tabInfo.url); },
+    onerror: (e) => { e.target.src = FAVICON_FALLBACK; },
   });
 
   const title = h('a', {
@@ -114,8 +115,3 @@ export function updateDupeBadge(el, dupeCount) {
   if (badge.textContent !== text) badge.textContent = text;
 }
 
-function defaultFaviconFor(url) {
-  // Chrome extension 页面可用的 fallback：占位 1x1 透明 gif 的 data URI
-  // 之后 M5 可替换为 chrome.runtime.getURL('icons/icon16.png') 或 favicon API
-  return 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
-}
