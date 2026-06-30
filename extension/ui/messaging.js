@@ -17,16 +17,58 @@ import { LOG_PREFIX } from '../shared/constants.js';
 
 // ========== 请求式通用封装 ==========
 
+/** SW 未就绪重试：次数与每次退避（ms）。P1-14。 */
+const SW_RETRY_DELAYS = [120, 300];
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * 单次发送，区分两类失败：
+ *   - SW 冷启动（response 为空 / "Could not establish connection" / "message port closed"）→ 可重试
+ *   - SW 明确返回 { ok:false } 业务错误 → 不重试，直接抛
+ * @returns {{data:any}} 成功时返回 { data }；可重试失败抛带 `retryable=true` 的 Error
+ */
+async function sendOnce(type, payload) {
+  let response;
+  try {
+    response = await chrome.runtime.sendMessage({ type, ...payload });
+  } catch (err) {
+    // sendMessage 在 SW 未就绪时会 reject（lastError）——标记为可重试
+    const e = new Error(err?.message || `sendMessage failed for ${type}`);
+    e.retryable = true;
+    throw e;
+  }
+  if (!response) {
+    const e = new Error(`no response from SW for ${type}`);
+    e.retryable = true;
+    throw e;
+  }
+  if (!response.ok) {
+    // 业务错误，不重试
+    throw new Error(response.error || `SW returned error for ${type}`);
+  }
+  return { data: response.data };
+}
+
 /**
  * 发送一条 REQ_* 消息，返回 response.data 或抛错。
+ * P1-14：SW 冷启动时自动重试（短退避），业务错误不重试。
  * @param {string} type
  * @param {object} [payload]
  */
 async function request(type, payload = {}) {
-  const response = await chrome.runtime.sendMessage({ type, ...payload });
-  if (!response) throw new Error(`no response from SW for ${type}`);
-  if (!response.ok) throw new Error(response.error || `SW returned error for ${type}`);
-  return response.data;
+  let lastErr;
+  for (let attempt = 0; attempt <= SW_RETRY_DELAYS.length; attempt++) {
+    try {
+      const { data } = await sendOnce(type, payload);
+      return data;
+    } catch (err) {
+      lastErr = err;
+      if (!err.retryable || attempt === SW_RETRY_DELAYS.length) throw err;
+      await sleep(SW_RETRY_DELAYS[attempt]);
+    }
+  }
+  throw lastErr;
 }
 
 // ========== M1 已实现的请求 ==========

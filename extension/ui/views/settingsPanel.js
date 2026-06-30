@@ -15,7 +15,7 @@
 
 import { h } from '../utils/dom.js';
 import * as messaging from '../messaging.js';
-import { LOG_PREFIX, IDLE_THRESHOLD_DEFAULT_SEC } from '../../shared/constants.js';
+import { LOG_PREFIX, IDLE_THRESHOLD_DEFAULT_SEC, IDLE_OPTIONS } from '../../shared/constants.js';
 
 /** @type {HTMLElement|null} */
 let panelEl = null;
@@ -27,35 +27,19 @@ let currentBlacklist = [];
 /** 当前 idle 阈值（秒），0 = 关闭 */
 let currentIdleThreshold = IDLE_THRESHOLD_DEFAULT_SEC;
 
-// D20 预设选项：值 → 标签
-const IDLE_OPTIONS = [
-  { value: 30,  label: '30 秒' },
-  { value: 60,  label: '1 分钟' },
-  { value: 180, label: '3 分钟（默认）' },
-  { value: 300, label: '5 分钟' },
-  { value: 600, label: '10 分钟' },
-  { value: 0,   label: '关闭' },
-];
-
 // ========== 初始化 ==========
 
 /**
+ * P1-04：init 改为同步——立即绑定事件并用默认阈值渲染，不再 await 阻塞。
+ * 真实 idle 阈值在后台异步拉取，拿到后局部刷新（消除 init 期间的 async 竞态）。
  * @param {{blacklist?: string[]}} initialState
  */
-export async function init(initialState = {}) {
+export function init(initialState = {}) {
   toggleBtn = document.getElementById('settingsToggle');
   panelEl = document.getElementById('settingsPanel');
   if (!toggleBtn || !panelEl) return;
 
   currentBlacklist = initialState.blacklist ?? [];
-
-  // 获取当前 idle 阈值
-  try {
-    const { threshold } = await messaging.getIdleThreshold();
-    if (typeof threshold === 'number') {
-      currentIdleThreshold = threshold;
-    }
-  } catch (_) { /* use default */ }
 
   toggleBtn.addEventListener('click', () => {
     const isOpen = !panelEl.hidden;
@@ -65,7 +49,18 @@ export async function init(initialState = {}) {
     if (!isOpen) renderPanel();
   });
 
+  // 先用默认值渲染，保证面板立即可用
   renderPanel();
+
+  // 异步拉真实 idle 阈值，拿到后若有变化再刷新（面板可能尚未展开，无害）
+  messaging.getIdleThreshold()
+    .then(({ threshold }) => {
+      if (typeof threshold === 'number' && threshold !== currentIdleThreshold) {
+        currentIdleThreshold = threshold;
+        if (panelEl && !panelEl.hidden) renderPanel();
+      }
+    })
+    .catch(() => { /* use default */ });
 }
 
 /**

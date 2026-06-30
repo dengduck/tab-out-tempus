@@ -1,26 +1,16 @@
 /**
  * background/timeTracker.js
  * --------------------------
- * ✨ v2 时间追踪核心（M4.5 D17 单一时间账本模型）。
+ * v2 时间追踪核心（M4.5 D17 单一时间账本模型）。详见 docs/DECISIONS-v2.md。
  *
- * **timeLog 是唯一持久真相源。**
- * tabSessionMs 是纯内存缓存（= 今日 timeLog 按 tid 聚合），
- * SW 重启时从 timeLog 重建，不持久化。
- *
+ * timeLog 是唯一持久真相源；tabSessionMs 是今日 timeLog 的内存缓存，SW 重启时重建。
  * 铁律：
- *   1. timeLog.appendSlice 是唯一持久化时间数据的方式。
- *   2. tabSessionMs 是 timeLog 的内存影子，只在 finalizeActiveSlice 时 `+=`。
- *      禁止赋值覆盖（init 重建例外）。
- *   3. pauseReasons 非空 → 绝对不开新 slice。恢复前提：Set 清空 && 有焦点 tab。
- *   4. finalize 要么把 slice 写掉，要么什么都不做；不允许留"半个 slice"。
- *
- * 数据源 & 边界：
- *   - hostname 从 tabInfoProvider(tabId).url 提取（shared/hostname.js）
- *   - 写 timeLog 通过 timeLog.appendSlice（串行化）
- *   - 持久化仅 __activeSliceSnapshot（30s 周期，防 SW 睡死丢时间）
- *   - 时间注入：nowProvider 允许测试里替换 Date.now
- *
- * 里程碑：M4 → M4.5（D17 收敛）。
+ *   1. timeLog.appendSlice 是唯一持久化时间的方式。
+ *   2. tabSessionMs 只在 finalizeActiveSlice 时 `+=`，禁止赋值（init 重建例外）。
+ *   3. pauseReasons 非空 → 不开新 slice；恢复前提：Set 清空 && 有焦点 tab。
+ *   4. finalize 要么写掉 slice，要么 no-op，不留"半个 slice"。
+ * 边界：hostname 取自 tabInfoProvider(tabId).url；仅持久化 __activeSliceSnapshot
+ * （30s 周期防 SW 睡死丢时间）；nowProvider 供测试替换 Date.now。
  */
 
 import { STORAGE_KEY, LOG_PREFIX, ALARM_PERIOD_S } from '../shared/constants.js';
@@ -34,17 +24,13 @@ import * as tabRegistry from './tabRegistry.js';
 
 // ========== 内部状态 ==========
 
-/**
- * 今日 timeLog 的内存缓存：tabId → 今日已 finalize 的毫秒总和。
- * 纯内存，不持久化。SW 重启时从 timeLog 重建。
- * @type {Map<number, number>}
- */
+/** 今日 timeLog 内存缓存：tabId → 已 finalize 毫秒总和。SW 重启时从 timeLog 重建。 @type {Map<number, number>} */
 const tabSessionMs = new Map();
 
 /** 当前正在计时的 tab id；null = 暂停中。 @type {number | null} */
 let activeTabId = null;
 
-/** 当前 slice 的起点时间戳（ms）；null = 没有活跃 slice。 @type {number | null} */
+/** 当前 slice 起点时间戳（ms）；null = 无活跃 slice。 @type {number | null} */
 let activeSliceStart = null;
 
 /** 当前 active tab 的 hostname（finalize 时写 timeLog 用）。 */
@@ -53,16 +39,13 @@ let activeHostname = '';
 /** 暂停原因集合。Set.size > 0 即暂停。 @type {Set<PauseReason>} */
 const pauseReasons = new Set();
 
-/** 注入的"现在"。测试里替换成 mock。 */
+/** 注入的"现在"，测试里替换成 mock。 */
 let nowProvider = () => Date.now();
 
 /** 注入的广播 emitter（SW 装载时注入；测试时可为 null）。 */
 let emit = null;
 
-/**
- * 注入的 tab 元数据查询。默认用 tabRegistry.get；测试可替换。
- * @type {(tabId:number) => ({url?:string}|null)}
- */
+/** 注入的 tab 元数据查询，默认 tabRegistry.get。 @type {(tabId:number) => ({url?:string}|null)} */
 let tabInfoProvider = (tabId) => tabRegistry.get?.(tabId) || null;
 
 /** 是否已初始化（防重入）。 */
@@ -242,9 +225,7 @@ export function onRemoveTab(tabId) {
   broadcastStateChange();
 }
 
-/**
- * URL 变化可能意味着 hostname 切换。旧 slice finalize 到旧 hostname，新 slice 用新 hostname。
- */
+/** URL 变化致 hostname 切换：旧 slice finalize 到旧 host，新 slice 用新 host。 */
 export function onUpdateUrl(tabId, oldUrl, newUrl) {
   if (typeof tabId !== 'number') return;
   if (tabId !== activeTabId) return;  // 非活跃 tab 的 URL 变化不影响计时
@@ -257,10 +238,7 @@ export function onUpdateUrl(tabId, oldUrl, newUrl) {
 
 // ========== 公共 API：周期性 ==========
 
-/**
- * 30s 周期 tick：持久化 active slice snapshot（防 SW 睡死）。
- * D17：不再持久化 tabCumulative（时间真相在 timeLog）。
- */
+/** 30s 周期 tick：持久化 active slice snapshot（防 SW 睡死）。 */
 export async function tick() {
   await persistSnapshot();
 }
@@ -283,11 +261,7 @@ async function persistSnapshot() {
   } catch (_) { /* ignore */ }
 }
 
-/**
- * SW 启动调用。
- *   - 从 timeLog 今日数据重建 tabSessionMs（D17：timeLog 是唯一真相）
- *   - 从 __activeSliceSnapshot 恢复"丢失的片段"
- */
+/** SW 启动调用：从 timeLog 重建今日 tabSessionMs + 从 snapshot 恢复丢失片段。 */
 export async function init(deps = {}) {
   emit = deps.emit || null;
   if (deps.nowProvider) nowProvider = deps.nowProvider;
@@ -331,10 +305,7 @@ export async function init(deps = {}) {
 
 // ========== 公共 API：读接口 ==========
 
-/**
- * 单个 tab 今日累计时长。= tabSessionMs 缓存 + (活跃 tab 的 running slice)。
- * API 语义不变（UI 层无感）。
- */
+/** 单个 tab 今日累计时长 = tabSessionMs 缓存 + 活跃 tab 的 running slice。 */
 export function getTabCumulativeMs(tabId) {
   const base = tabSessionMs.get(tabId) || 0;
   if (tabId === activeTabId && activeSliceStart !== null) {
@@ -348,10 +319,7 @@ export function getActiveRunningMs() {
   return now() - activeSliceStart;
 }
 
-/**
- * "今日工作"= 今日 timeLog 聚合 + 当前 running slice。
- * 优化：用 tabSessionMs 总和代替每次查 storage。
- */
+/** "今日工作" = tabSessionMs 总和 + 当前 running slice（不查 storage）。 */
 export function getTodayTotalMs() {
   let total = 0;
   for (const ms of tabSessionMs.values()) total += ms;
@@ -359,10 +327,7 @@ export function getTodayTotalMs() {
   return total;
 }
 
-/**
- * 指定 hostname 下所有 open tab 的今日累计总时长。
- * （M5 域名卡聚合时长 / M6 域名排行 都用这个）
- */
+/** 指定 hostname 下所有 open tab 的今日累计总时长（M5 域名卡 / M6 排行用）。 */
 export function getHostnameTotalMsForOpenTabs(hostname) {
   let total = 0;
   for (const [tabId] of tabSessionMs) {
@@ -374,11 +339,7 @@ export function getHostnameTotalMsForOpenTabs(hostname) {
   return total;
 }
 
-/**
- * 今日域名维度聚合：返回 {hostname: ms} 字典。
- * 数据来源是 timeLog 缓存（tabSessionMs），不再额外查 storage。
- * 给 M6 历史统计用。
- */
+/** 今日域名维度聚合 → {hostname: ms}，数据源 tabSessionMs（M6 历史统计用）。 */
 export function getDomainTodayMs() {
   const result = {};
   for (const [tabId, ms] of tabSessionMs) {

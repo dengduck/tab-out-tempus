@@ -13,6 +13,19 @@ export const ALARM_PERIOD_S = 30;
 /** chrome.idle 键鼠空闲检测默认阈值（秒）。D20：默认 180s，用户可配置。 */
 export const IDLE_THRESHOLD_DEFAULT_SEC = 180;
 
+/**
+ * D20 空闲阈值预设选项（设置面板 dropdown）。value 单位秒，0 = 关闭。
+ * P2-07：从 settingsPanel.js 提取为共享常量，便于复用与单测。
+ */
+export const IDLE_OPTIONS = Object.freeze([
+  { value: 30,  label: '30 秒' },
+  { value: 60,  label: '1 分钟' },
+  { value: 180, label: '3 分钟（默认）' },
+  { value: 300, label: '5 分钟' },
+  { value: 600, label: '10 分钟' },
+  { value: 0,   label: '关闭' },
+]);
+
 /** BCAST_TICK 广播间隔（毫秒）。仅在有活跃 UI 连接时发送。 */
 export const TICK_INTERVAL_MS = 1000;
 
@@ -46,6 +59,8 @@ export const STORAGE_KEY = Object.freeze({
   BLACKLIST: 'blacklist',
   CONFIG: 'config',
   CONFIG_IDLE_THRESHOLD_SEC: 'config.idleThresholdSec',
+  WELCOME_BANNER_DISMISSED: '__welcomeBannerDismissed',
+  INSTALL_TIME: '__installTime',
   // session-only
   HOSTNAME_LAST_FOCUS: '__hostnameLastFocus',
 });

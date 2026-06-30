@@ -23,6 +23,7 @@ import * as sidebar from './views/sidebar.js';
 import * as settingsPanel from './views/settingsPanel.js';
 import * as privateModeWidget from './views/privateModeWidget.js';
 import * as focusTimerWidget from './views/focusTimerWidget.js';
+import * as welcomeBanner from './views/welcomeBanner.js';
 import { LOG_PREFIX } from '../shared/constants.js';
 import { $ } from './utils/dom.js';
 import { playSwoosh } from './utils/audio.js';
@@ -95,6 +96,9 @@ async function main() {
   // M9: Header 快捷控件
   privateModeWidget.init(state.privateMode ?? null);
   focusTimerWidget.init(state.focusTimer ?? null);
+
+  // M9: 首次安装欢迎横幅（7 天后自动消失或用户点 × 关掉）
+  welcomeBanner.init();
 
   // 事件委托
   tabsGrid.bindEvents(gridEl, {

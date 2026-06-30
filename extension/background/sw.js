@@ -135,7 +135,16 @@ function registerTabEventsForTracker() {
 }
 
 // 三入口覆盖冷启动 + 事件唤醒 + 模块加载
-chrome.runtime.onInstalled.addListener(() => { bootstrap(); });
+chrome.runtime.onInstalled.addListener(async (details) => {
+  // 仅首次安装时记录安装时间（更新时不覆盖）
+  if (details.reason === 'install') {
+    const existing = await localGet(STORAGE_KEY.INSTALL_TIME);
+    if (!existing) {
+      await localSet(STORAGE_KEY.INSTALL_TIME, Date.now());
+    }
+  }
+  bootstrap();
+});
 chrome.runtime.onStartup.addListener(() => { bootstrap(); });
 bootstrap();
 
