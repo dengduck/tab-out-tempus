@@ -68,10 +68,9 @@ const { run } = await import('./testUtil.js');
 // Import test files (side effect: register suites)
 await import('./timeTracker.test.js');
 
-// Also import formatDuration.test.js if exists
-try {
-  await import('./formatDuration.test.js');
-} catch (_) { /* optional */ }
+// Import additional test files.
+await import('./formatDuration.test.js');
+await import('./sidebar.test.js');
 
 const { pass, fail } = await run(null);
 console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);

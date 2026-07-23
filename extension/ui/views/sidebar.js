@@ -5,14 +5,14 @@
  *
  * 功能：
  *   - 显示已保存的标签列表（标题 + URL + 保存时间）
- *   - 点击恢复（打开 URL + 从列表移除）
+ *   - 点击标题只打开（像收藏夹，不移除）
  *   - 点 × 删除
  *
  * 数据流：
  *   - 首帧：main.js 调 render(sidebarEl, savedList)
  *   - 新增保存：main.js 调 add(entry) 追加到 DOM
  *   - 删除：用户点 × → messaging.removeSaved → 移除 DOM
- *   - 恢复：用户点标题 → 新开 tab + messaging.removeSaved
+ *   - 打开：用户点标题 → 新开 tab（条目保留在列表中）
  *
  * 里程碑：M7。
  */
@@ -100,13 +100,11 @@ function createEntryEl(entry) {
 
   title.addEventListener('click', async (e) => {
     e.preventDefault();
-    // 打开 URL 并从列表移除
+    // 像收藏夹一样：点击只打开，不移除。仅点 × 才移出（见 removeBtn）。
     try {
       await chrome.tabs.create({ url: entry.url, active: false });
-      await messaging.removeSaved(entry.id);
-      remove(entry.id);
     } catch (err) {
-      console.error('[tempus] sidebar restore failed', err);
+      console.error('[tempus] sidebar open failed', err);
     }
   });
 
