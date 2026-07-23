@@ -1,15 +1,10 @@
 /**
  * ui/messaging.js
  * ----------------
- * UI 端与 SW 通信的封装。所有 chrome.runtime.sendMessage 调用都走这里。
- *
+ * UI 端与 SW 通信封装：REQ_* 走 sendMessage，BCAST_* 走 runtime Port。
+ * Port 断线自动重连，页面关闭时由 Chrome 自动触发 onDisconnect。
  * 契约：ARCHITECTURE-v2.md §3.9 / §5 / DECISIONS-v2.md D10。
- *
- * 请求式 API：返回 Promise<data>，失败抛 Error
- * 订阅式 API：返回 unsubscribe 函数
- *
- * **M1 只实现：notifyUIReady / notifyUIGone / getState**。
- * 其余 API 在对应 M 里填。
+ * 请求式 API 返回 Promise<data>；订阅式 API 返回 unsubscribe。
  */
 
 import { MSG } from '../shared/messages.js';
@@ -71,14 +66,67 @@ async function request(type, payload = {}) {
   throw lastErr;
 }
 
-// ========== M1 已实现的请求 ==========
+// ========== UI Port 生命周期 ==========
 
-export function notifyUIReady() {
-  return request(MSG.REQ_UI_READY);
+const subscribers = new Map();
+let uiPort = null;
+let reconnectEnabled = false;
+let reconnectTimer = null;
+let heartbeatTimer = null;
+
+function dispatchBroadcast(message) {
+  const callbacks = subscribers.get(message?.type);
+  if (!callbacks) return;
+  for (const cb of callbacks) {
+    try { cb(message.payload); }
+    catch (err) { console.error(LOG_PREFIX, 'subscribe callback error', message.type, err); }
+  }
 }
 
-export function notifyUIGone() {
-  return request(MSG.REQ_UI_GONE);
+function connectUIPort() {
+  if (uiPort) return;
+  try {
+    const port = chrome.runtime.connect({ name: 'tempus-ui' });
+    uiPort = port;
+    port.onMessage.addListener(dispatchBroadcast);
+    heartbeatTimer = setInterval(() => {
+      try { port.postMessage({ type: 'UI_HEARTBEAT' }); } catch (_) { /* reconnect handles it */ }
+    }, 20_000);
+    port.onDisconnect.addListener(() => {
+      if (uiPort === port) uiPort = null;
+      if (heartbeatTimer !== null) clearInterval(heartbeatTimer);
+      heartbeatTimer = null;
+      if (reconnectEnabled && reconnectTimer === null) {
+        reconnectTimer = setTimeout(() => {
+          reconnectTimer = null;
+          connectUIPort();
+        }, 250);
+      }
+    });
+  } catch (err) {
+    console.warn(LOG_PREFIX, 'UI port connect failed', err);
+    if (reconnectEnabled && reconnectTimer === null) {
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        connectUIPort();
+      }, 250);
+    }
+  }
+}
+
+export async function notifyUIReady() {
+  reconnectEnabled = true;
+  connectUIPort();
+  return { connected: uiPort !== null };
+}
+
+export async function notifyUIGone() {
+  reconnectEnabled = false;
+  if (reconnectTimer !== null) clearTimeout(reconnectTimer);
+  reconnectTimer = null;
+  uiPort?.disconnect();
+  uiPort = null;
+  return { disconnected: true };
 }
 
 /** @returns {Promise<import('../shared/types.js').GlobalState>} */
@@ -120,17 +168,16 @@ export function setIdleThreshold(threshold) { return request(MSG.REQ_SET_IDLE_TH
  * @param {(payload: any) => void} cb
  */
 function subscribe(msgType, cb) {
-  const listener = (message) => {
-    if (message?.type === msgType) {
-      try {
-        cb(message.payload);
-      } catch (err) {
-        console.error(LOG_PREFIX, 'subscribe callback error', msgType, err);
-      }
-    }
+  let callbacks = subscribers.get(msgType);
+  if (!callbacks) {
+    callbacks = new Set();
+    subscribers.set(msgType, callbacks);
+  }
+  callbacks.add(cb);
+  return () => {
+    callbacks.delete(cb);
+    if (callbacks.size === 0) subscribers.delete(msgType);
   };
-  chrome.runtime.onMessage.addListener(listener);
-  return () => chrome.runtime.onMessage.removeListener(listener);
 }
 
 export function subscribeTick(cb)        { return subscribe(MSG.BCAST_TICK, cb); }

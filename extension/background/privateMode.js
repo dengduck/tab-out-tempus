@@ -41,6 +41,12 @@ function broadcastChange() {
   }
 }
 
+function clearRuntimeState() {
+  endTime = null;
+  try { chrome.alarms.clear(ALARM_NAME); } catch (_) { /* ignore */ }
+  timeTracker.resume(PAUSE_REASON);
+}
+
 // ========== 公共 API ==========
 
 export async function start(durationMin) {
@@ -61,14 +67,10 @@ export async function start(durationMin) {
 }
 
 export async function stop() {
-  if (endTime === null) return;
+  if (endTime === null && !timeTracker.isPausedBy(PAUSE_REASON)) return;
 
-  endTime = null;
+  clearRuntimeState();
   await localRemove(STORAGE_KEY.PRIVATE_MODE);
-
-  try { chrome.alarms.clear(ALARM_NAME); } catch (_) { /* ignore */ }
-
-  timeTracker.resume(PAUSE_REASON);
   log('stopped');
   broadcastChange();
 }
@@ -77,10 +79,9 @@ export function getStatus() {
   if (endTime === null) return null;
   const remaining = endTime - Date.now();
   if (remaining <= 0) {
-    // 已过期但 alarm 尚未触发（SW 休眠等极端情况） → 主动清理
-    endTime = null;
+    // alarm 延迟时主动过期；必须同步解除 pauseReason，避免永久停表。
+    clearRuntimeState();
     localRemove(STORAGE_KEY.PRIVATE_MODE).catch(() => {});
-    try { chrome.alarms.clear(ALARM_NAME); } catch (_) { /* ignore */ }
     return null;
   }
   return {

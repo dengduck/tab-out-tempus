@@ -7,7 +7,7 @@
 
 // ========== 时间 / 计时相关 ==========
 
-/** TimeTracker 周期性快照间隔（秒）。SW 重启时最多丢这个时间的计时。 */
+/** TimeTracker alarm 间隔（秒）；长 slice 最迟在 2 个周期后结算轮转。 */
 export const ALARM_PERIOD_S = 30;
 
 /** chrome.idle 键鼠空闲检测默认阈值（秒）。D20：默认 180s，用户可配置。 */

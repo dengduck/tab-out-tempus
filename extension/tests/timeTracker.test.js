@@ -10,7 +10,7 @@ import { suite, test, assert } from './testUtil.js';
 import { resetMockStorage } from './mockChrome.js';
 import * as timeTracker from '../background/timeTracker.js';
 import * as timeLog from '../background/timeLog.js';
-import { STORAGE_KEY } from '../shared/constants.js';
+import { ALARM_PERIOD_S, STORAGE_KEY } from '../shared/constants.js';
 
 // --------- helpers ---------
 
@@ -210,7 +210,81 @@ suite('TimeTracker — Private Mode / blacklist 作为 pauseReason', () => {
   });
 });
 
+suite('TimeTracker — 周期 checkpoint', () => {
+  test('长 slice 被结算并轮转，重启时只补偿 checkpoint 后缺口', async () => {
+    const start = 1_000;
+    const { clock } = await freshTracker(start, [{ id: 7, url: 'https://a.com' }]);
+    timeTracker.onActivateTab(7);
+
+    const checkpointMs = ALARM_PERIOD_S * 2 * 1000 + 1_000;
+    clock.advance(checkpointMs);
+    await timeTracker.tick();
+    await timeLog.flush();
+
+    assert.equal(timeTracker.getTabCumulativeMs(7), checkpointMs, 'checkpoint keeps cumulative total');
+    assert.equal(timeTracker.__testing.getInternalSliceStart(), start + checkpointMs, 'new slice starts at checkpoint');
+
+    const stored = await timeLog.getRange(-1, 1e15);
+    assert.equal(stored.length, 1, 'completed slice persisted');
+    assert.equal(stored[0].e - stored[0].s, checkpointMs, 'full pre-checkpoint duration persisted');
+
+    const snapshot = (await chrome.storage.local.get(STORAGE_KEY.ACTIVE_SLICE_SNAPSHOT))[STORAGE_KEY.ACTIVE_SLICE_SNAPSHOT];
+    assert.equal(snapshot.sliceStart, start + checkpointMs, 'snapshot points to rotated slice');
+
+    // 模拟 checkpoint 后 SW 休眠 10 分钟：旧段已完整落盘，新段最多补 60 秒。
+    clock.advance(10 * 60 * 1000);
+    timeTracker.__testing.reset();
+    await timeTracker.init({
+      nowProvider: () => clock.now(),
+      tabInfoProvider: () => null,
+    });
+
+    assert.equal(
+      timeTracker.getTabCumulativeMs(7),
+      checkpointMs + ALARM_PERIOD_S * 2 * 1000,
+      'restart preserves checkpointed duration and caps only the unknown gap',
+    );
+  });
+});
+
+suite('TimeTracker — 跨午夜滚动', () => {
+  test('running slice 在本地零点切分，今日缓存不带入昨日时间', async () => {
+    const startDate = new Date(2026, 0, 15, 23, 59, 50, 0);
+    const midnight = new Date(2026, 0, 16, 0, 0, 0, 0).getTime();
+    const { clock } = await freshTracker(startDate.getTime(), [{ id: 3, url: 'https://a.com' }]);
+    timeTracker.onActivateTab(3);
+
+    clock.advance(20_000);
+    assert.equal(timeTracker.getTodayTotalMs(), 10_000, 'today contains only post-midnight time');
+    assert.equal(timeTracker.getTabCumulativeMs(3), 10_000, 'tab cache rolled to current day');
+
+    timeTracker.onRemoveTab(3);
+    await timeLog.flush();
+    const previousDay = await timeLog.getRange(startDate.getTime() - 1_000, midnight);
+    const currentDay = await timeLog.getRange(midnight, clock.now() + 1_000);
+    assert.equal(previousDay.reduce((sum, s) => sum + s.e - s.s, 0), 10_000, 'pre-midnight slice persisted');
+    assert.equal(currentDay.reduce((sum, s) => sum + s.e - s.s, 0), 10_000, 'post-midnight slice persisted');
+  });
+});
+
 suite('TimeTracker — SW 重启恢复（D17 模型）', () => {
+  test('跨午夜 snapshot 只把零点后的交集计入今日缓存', async () => {
+    resetMockStorage();
+    timeLog.__resetForTests();
+    const sliceStart = new Date(2026, 0, 15, 23, 59, 50).getTime();
+    const now = new Date(2026, 0, 16, 0, 0, 20).getTime();
+    await chrome.storage.local.set({
+      [STORAGE_KEY.ACTIVE_SLICE_SNAPSHOT]: { tabId: 5, hostname: 'a.com', sliceStart },
+    });
+    timeTracker.__testing.reset();
+    await timeTracker.init({ nowProvider: () => now, tabInfoProvider: () => null });
+
+    assert.equal(timeTracker.getTabCumulativeMs(5), 20_000, 'only post-midnight recovery enters today cache');
+    await timeLog.flush();
+    const recovered = await timeLog.getRange(sliceStart, now + 1);
+    assert.equal(recovered.reduce((sum, s) => sum + s.e - s.s, 0), 30_000, 'full recovery remains auditable');
+  });
+
   test('init 从 timeLog 重建 tabSessionMs', async () => {
     resetMockStorage();
     timeLog.__resetForTests();

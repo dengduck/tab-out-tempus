@@ -4,6 +4,20 @@ All notable changes to **Tabpus** are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [2.0.1] — 2026-07-23
+
+### Fixed
+- **Save for Later semantics**: Opening a saved link now keeps it in the list; only the explicit × action removes it.
+- **MV3 checkpoint recovery**: Long active slices are finalized and rotated periodically, preventing most of a long browsing session from being lost after service worker termination.
+- **Private Mode expiry**: An expired session now always releases the `private-mode` pause reason, even when the alarm was delayed.
+- **Midnight rollover**: Today counters and running slices reset at local midnight; local day boundaries no longer assume every day is exactly 24 hours.
+- **UI lifecycle**: Replaced READY/GONE reference counting with real runtime Ports, automatic reconnect, and heartbeat-based keepalive while a new-tab UI is open.
+- **Partial state broadcasts**: Missing fields no longer clear Focus Timer or Private Mode widget state.
+
+### Changed
+- `BCAST_TICK` now includes the tab-time snapshot, eliminating the UI's additional per-second batch request.
+- Expanded the Node test suite from 40 to 48 cases, covering Save for Later, checkpoint recovery, midnight rollover, Private Mode expiry, and runtime Port dispatch.
+
 ## [2.0.0] — 2026-04-22
 
 Complete rewrite with modular ES Module architecture. Zero dependencies, zero build tools.

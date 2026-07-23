@@ -137,20 +137,20 @@
 
 **测试要求**：`tests/pauseReasons.test.js` 必须覆盖多源叠加的全排列（见 ARCHITECTURE-v2.md §9.2）。
 
-## D10. 消息协议：请求式 + 订阅式混合（M0 冻结）
+## D10. 消息协议：请求式 + 订阅式混合（M0 冻结，2026-07-23 生命周期修订）
 
 **决定**：UI ↔ SW 通信采用混合模式：
 - **请求式（REQ_\*）**：UI 主动问 SW 要数据，一次性 sendMessage + sendResponse（类似 RPC）
-- **订阅式（BCAST_\*）**：SW 在状态变化时广播，UI 通过 `chrome.runtime.onMessage` 接收
+- **订阅式（BCAST_\*）**：UI 建立命名 `runtime Port`，SW 只向活跃 Port 推送广播；断线自动重连
 
 **消息类型前缀强制区分**（在 `shared/messages.js`）：
 - `MSG.REQ_*` — 所有请求式消息
 - `MSG.BCAST_*` — 所有广播消息
 
 **广播类型**：
-- `BCAST_TICK`（1s/次）：`{now, todayMs, activeTabId, activeTabMs}`，带动 chip badge 和 header 实时更新
+- `BCAST_TICK`（1s/次）：`{now, todayMs, activeTabId, isActive, tabTimes}`，一次更新 header 与全部 chip，避免额外轮询
 - `BCAST_TAB_CHANGE`（事件驱动）：tab 增删改，UI 做 diff 更新
-- `BCAST_STATE_CHANGE`（事件驱动）：pauseReasons / privateMode / focusTimer 变化
+- `BCAST_STATE_CHANGE`（事件驱动）：pauseReasons / privateMode / focusTimer 变化；允许部分 payload，UI 必须保留未携带字段
 
 **理由**：
 - 纯 RPC：`REQ_GET_TAB_TIME` 轮询浪费 IPC，且有延迟
@@ -158,15 +158,16 @@
 - 混合模式各取所长：实时数字走订阅（省轮询），快照数据走请求（省订阅复杂度）
 - 前缀强制区分让代码审查时一眼区分："这是请求还是广播？"不用读实现
 
-**BCAST_TICK 节电策略**（重要）：
-- UI 初始化时给 SW 发 `REQ_GET_STATE`，SW 记录 `hasActiveUIPort = true`
-- 只有 `hasActiveUIPort` 时才发 BCAST_TICK，避免 SW 无人在听还在广播
-- 所有 new tab page 关闭时（UI 端 `beforeunload`），发 `REQ_UI_GONE`，SW 置 false
+**BCAST_TICK 节电与生命周期策略**（重要）：
+- UI 初始化时建立名为 `tempus-ui` 的 `runtime Port`；页面关闭由 Chrome 自动触发 `onDisconnect`
+- SW 用 `Set<Port>` 支持多个 new tab 页面，只有集合非空时才运行 1s UI tick
+- UI 每 20s 通过 Port 发送 heartbeat；SW 被系统回收导致 Port 断开时，UI 自动重连并恢复 tick
+- `REQ_UI_READY/GONE` 仅保留为旧 UI 兼容入口，不再参与引用计数
 
 **实现约束**：
 - REQ 消息的 `onMessage` handler 必须 `return true`（MV3 异步响应要求）
-- BCAST 消息的 payload 必须 **最小化**（TICK 里不带完整 tab 列表，只带几个数字）
-- UI 订阅 API 返回 unsubscribe 函数，`historyView` 关闭时解绑
+- TICK 可携带 `tabTimes`，但只能计算/发送一次，禁止 UI 再发每秒批量查询
+- UI 订阅 API 返回 unsubscribe 函数；部分状态广播不得清空未携带字段
 
 ## D11. UI 初始化流程：一次性请求 + 订阅式增量（M0 冻结）
 

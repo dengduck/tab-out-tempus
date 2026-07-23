@@ -71,6 +71,8 @@ await import('./timeTracker.test.js');
 // Import additional test files.
 await import('./formatDuration.test.js');
 await import('./sidebar.test.js');
+await import('./privateMode.test.js');
+await import('./messaging.test.js');
 
 const { pass, fail } = await run(null);
 console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);

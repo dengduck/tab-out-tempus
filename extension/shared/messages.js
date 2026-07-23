@@ -39,7 +39,7 @@ export const MSG = Object.freeze({
   REQ_UI_GONE:            'REQ_UI_GONE',
 
   // ===== 订阅式 BCAST_* =====
-  BCAST_TICK:         'BCAST_TICK',           // {now, todayMs, activeTabId, activeTabMs}
+  BCAST_TICK:         'BCAST_TICK',           // {now, todayMs, activeTabId, isActive, tabTimes}
   BCAST_TAB_CHANGE:   'BCAST_TAB_CHANGE',     // {action: 'added'|'removed'|'updated'|'moved', tabInfo}
   BCAST_STATE_CHANGE: 'BCAST_STATE_CHANGE',   // {pauseReasons, privateMode, focusTimer}
 });

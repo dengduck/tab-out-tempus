@@ -255,8 +255,8 @@ export async function startPrivateMode(min);
 export async function getTrackingDiagnostics();    // 调试用：pauseReasons 等
 
 // ========== 订阅式（SW 主动广播） ==========
-// SW 通过 chrome.runtime.sendMessage 广播，UI 通过 onMessage 接收
-export function subscribeTick(cb);                 // 每秒一次，cb({now, todayMs, activeTabMs})
+// UI 建立 runtime Port；SW 通过 port.postMessage 广播
+export function subscribeTick(cb);                 // 每秒一次，cb({now, todayMs, activeTabId, isActive, tabTimes})
 export function subscribeTabChange(cb);            // tab 打开/关闭/URL 变化，cb({action, tabInfo})
 export function subscribeStateChange(cb);          // pauseReasons / privateMode / focusTimer 变化
 
@@ -264,7 +264,7 @@ export function subscribeStateChange(cb);          // pauseReasons / privateMode
 ```
 
 **广播频率约束：**
-- `tick` 1 秒一次，只带最小 payload（now + 几个数字），渲染层自己决定用不用
+- `tick` 1 秒一次，携带 header 状态与 `tabTimes` 快照，替代 UI 每秒额外批量查询
 - `tabChange` 事件驱动（不周期广播）
 - `stateChange` 事件驱动（pauseReasons Set 变化时才发）
 
@@ -361,9 +361,8 @@ export const MSG = Object.freeze({
   REQ_BLACKLIST_ADD:      'REQ_BLACKLIST_ADD',      // req: {hostname}
   REQ_BLACKLIST_REMOVE:   'REQ_BLACKLIST_REMOVE',
 
-  // ===== 订阅式：SW → UI broadcast =====
-  // SW 用 chrome.runtime.sendMessage 广播（所有 new tab page 实例都收到）
-  BCAST_TICK:          'BCAST_TICK',             // 1s/次, {now, todayMs, activeTabId, activeTabMs}
+  // ===== 订阅式：SW → UI runtime Port =====
+  BCAST_TICK:          'BCAST_TICK',             // 1s/次, {now, todayMs, activeTabId, isActive, tabTimes}
   BCAST_TAB_CHANGE:    'BCAST_TAB_CHANGE',       // 事件驱动, {action, tabInfo}
   //   action: 'added' | 'removed' | 'updated' | 'moved'
   BCAST_STATE_CHANGE:  'BCAST_STATE_CHANGE',     // 事件驱动, {pauseReasons, privateMode, focusTimer}
@@ -373,8 +372,8 @@ export const MSG = Object.freeze({
 **设计约束：**
 - UI 不直接查 `chrome.storage`，统一过 SW（例外：`save-for-later` 读本地 storage 可行，因为无计算）
 - REQ 的 sendResponse **必须 return true**（Chrome MV3 异步响应要求）
-- BCAST 采用 `chrome.runtime.sendMessage({type: BCAST_*, payload})`，UI `chrome.runtime.onMessage.addListener` 接收
-- BCAST_TICK 频率固定 1 秒（由 SW 的 alarms 或 tab 有人监听时才开启的 setInterval 控制，没 listener 时暂停广播以省电）
+- BCAST 采用命名 `runtime Port`；SW 遍历活跃 Port 调 `postMessage`，页面关闭自动 `onDisconnect`
+- BCAST_TICK 频率固定 1 秒，仅在至少一个 UI Port 在线时运行；UI heartbeat 保持连接并在断线后自动重连
 
 ---
 
@@ -385,8 +384,8 @@ export const MSG = Object.freeze({
 | Key | Shape | 说明 |
 |---|---|---|
 | `timeLog.2026-04` | `Array<{s:number, e:number, h:string, tid?:number}>` | 按月分片的历史 slice；s/e 是 UTC 毫秒时间戳；h 是 hostname；tid 是 tab id（可能已关闭） |
-| `__tabCumulative` | `{[tabId]: {firstSeen:number, cumulativeMs:number}}` | TimeTracker 的周期快照，SW 重启时恢复 |
-| `__activeSliceSnapshot` | `{tabId, hostname, sliceStart} \| null` | 当前运行中 slice 的快照，SW 冷启动时 finalize 到 now（最多丢 ALARM_PERIOD_S） |
+| `__tabCumulative` | 已废止，仅启动时清理旧数据 | D17 后不再持久化聚合缓存 |
+| `__activeSliceSnapshot` | `{tabId, hostname, sliceStart} \| null` | 当前短 slice 的兜底快照；长 slice 每 2 个 alarm 周期强制结算轮转 |
 | `saved` | `Array<{id, url, title, favicon, savedAt}>` | Save for Later |
 | `privateMode` | `{endTime:number} \| null` | 隐私计时到期时间戳 |
 | `focusTimer` | `{startTime, durationMs, strict:boolean} \| null` | 番茄钟状态 |
@@ -414,8 +413,7 @@ export const MSG = Object.freeze({
 2. **启动三入口**都要调 `init()`：`chrome.runtime.onInstalled`, `chrome.runtime.onStartup`, SW 顶层模块 init。
 3. **`chrome.storage.session` 不跨 SW 重启**（Manifest V3）。跨重启要持久的数据写 `local`。
 4. **写入竞争**：`appendSlice` 必须串行化（Promise 队列），不能并发 get→修改→set。
-5. **BCAST_TICK 的广播源**：不能用 `setInterval`（SW 休眠会停）。用 `chrome.alarms` 0.5min 粒度太粗；方案是"有 new tab page 连接着才广播"——
-   UI 初始化时发 `REQ_GET_STATE`，SW 记录活跃 port；如有活跃 port，在 SW 唤醒期间用 `setTimeout` 递归模拟 1s tick（只在有 port 时存在，所以不会被 SW 休眠影响到用户不可见的时间）。
+5. **BCAST_TICK 的广播源**：持久计时仍只用 `chrome.alarms`；1s UI 刷新是唯一例外。UI 建立真实 Port 并每 20s heartbeat，SW 仅在 Port 集合非空时运行 interval；断线后 UI 自动重连。
 
 ---
 
@@ -441,9 +439,9 @@ renderHeader({ todayMs: today.totalMs, state });
 renderSidebar(saved);
 
 // 4. 订阅 SW 广播（只订阅本 view 关心的）
-messaging.subscribeTick(({ now, todayMs, activeTabId, activeTabMs }) => {
-  header.updateTodayMs(todayMs);
-  tabsGrid.updateActiveTabBadge(activeTabId, activeTabMs);
+messaging.subscribeTick(({ todayMs, activeTabId, isActive, tabTimes }) => {
+  header.updateTodayMs(todayMs, isActive);
+  tabsGrid.applyTimeSnapshot({ activeTabId, tabTimes });
 });
 
 messaging.subscribeTabChange(({ action, tabInfo }) => {

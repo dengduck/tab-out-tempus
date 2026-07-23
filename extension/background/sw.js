@@ -5,7 +5,7 @@
  *
  * 职责：
  *   1. 监听 chrome.* 事件并**路由**到具体业务模块。本文件自己不写业务逻辑。
- *   2. 维护 UI 连接状态（hasActiveUIPort），决定是否广播 BCAST_TICK。
+ *   2. 维护真实 runtime Port 集合，只向活跃 UI 广播 BCAST_*。
  *   3. 启动时按正确顺序调用各模块 init()（顶层 import + onInstalled + onStartup 三入口）。
  *
  * 当前阶段：M8（Focus Timer + Blacklist + Private Mode）。
@@ -27,35 +27,33 @@ import { localGet, localSet } from './store.js';
 
 // ========== UI 连接状态 ==========
 
-let uiPortCount = 0;
+const uiPorts = new Set();
 let tickIntervalId = null;
 
 // ========== 广播 ==========
 
 function broadcast(type, payload) {
-  if (uiPortCount <= 0) return;
-  try {
-    chrome.runtime.sendMessage({ type, payload }).catch(() => { /* no receivers */ });
-  } catch (_) { /* ignore */ }
+  for (const port of uiPorts) {
+    try { port.postMessage({ type, payload }); }
+    catch (_) { uiPorts.delete(port); }
+  }
 }
 
 function startTickBroadcast() {
   if (tickIntervalId !== null) return;
-  // setInterval 在 SW 活跃期间有效；SW 睡了会停，但没 UI 的时候本来就不需要广播。
-  // UI 存在 = 必有 port 在通讯 = SW 不会睡。
   tickIntervalId = setInterval(() => {
-    if (uiPortCount <= 0) return;
+    if (uiPorts.size === 0) return;
     const state = timeTracker.getTrackingState();
-    const todayMs = timeTracker.getTodayTotalMs();
-    const activeTabMs = state.activeTabId !== null
-      ? timeTracker.getTabCumulativeMs(state.activeTabId)
-      : 0;
+    const tabTimes = {};
+    for (const tab of tabRegistry.getAll()) {
+      tabTimes[tab.id] = timeTracker.getTabCumulativeMs(tab.id);
+    }
     broadcast(MSG.BCAST_TICK, {
       now: Date.now(),
-      todayMs,
+      todayMs: timeTracker.getTodayTotalMs(),
       activeTabId: state.activeTabId,
-      activeTabMs,
-      isActive: state.isActive,  // M8: 直接告诉 UI 是否在计时
+      isActive: state.isActive,
+      tabTimes,
     });
   }, TICK_INTERVAL_MS);
 }
@@ -77,7 +75,7 @@ async function bootstrap() {
   bootstrapPromise = (async () => {
     if (bootstrapped) return;
     bootstrapped = true;
-    console.log(LOG_PREFIX, 'SW bootstrap v2.0.0');
+    console.log(LOG_PREFIX, 'SW bootstrap', chrome.runtime.getManifest().version);
 
     // 1. tabRegistry（需要先有它，timeTracker 靠它查 hostname）
     await tabRegistry.init({ emit: broadcast });
@@ -134,6 +132,19 @@ function registerTabEventsForTracker() {
   });
 }
 
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name !== 'tempus-ui') return;
+  uiPorts.add(port);
+  port.onMessage.addListener(() => { /* heartbeat keeps MV3 SW active while UI is open */ });
+  bootstrap().then(startTickBroadcast).catch((err) => {
+    console.error(LOG_PREFIX, 'UI port bootstrap failed', err);
+  });
+  port.onDisconnect.addListener(() => {
+    uiPorts.delete(port);
+    if (uiPorts.size === 0) stopTickBroadcast();
+  });
+});
+
 // 三入口覆盖冷启动 + 事件唤醒 + 模块加载
 chrome.runtime.onInstalled.addListener(async (details) => {
   // 仅首次安装时记录安装时间（更新时不覆盖）
@@ -169,14 +180,9 @@ async function handleRequest(message, _sender) {
   await bootstrap();
 
   switch (message.type) {
+    // 兼容旧 UI；新版本使用 runtime Port 自动管理连接生命周期。
     case MSG.REQ_UI_READY:
-      uiPortCount++;
-      startTickBroadcast();
-      return { ok: true };
-
     case MSG.REQ_UI_GONE:
-      uiPortCount = Math.max(0, uiPortCount - 1);
-      if (uiPortCount === 0) stopTickBroadcast();
       return { ok: true };
 
     case MSG.REQ_GET_STATE:

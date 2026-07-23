@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Tabpus",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Keep tabs on your tabs. New tab page that groups your open tabs by domain, tracks per-tab lifetime, and lets you close them with style.",
   "permissions": ["tabs", "activeTab", "storage", "sessions", "alarms", "idle"],
   "chrome_url_overrides": { "newtab": "index.html" },

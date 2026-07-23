@@ -4,13 +4,11 @@
  * New tab page 入口。
  *
  * 流程（契约见 ARCHITECTURE-v2.md §8 / DECISIONS-v2.md D11）：
- *   1. 握手 REQ_UI_READY
+ *   1. 建立 runtime Port（断线自动重连）
  *   2. 并发拉快照：state + tabs + todayWork + tabTimes
  *   3. 首次渲染 header + tabsGrid + 时间 badge
- *   4. 订阅 BCAST_TAB_CHANGE（增量 DOM）/ BCAST_TICK（刷今日工作）/ BCAST_STATE_CHANGE（刷状态圆点）
- *   5. 每秒主动拉 getTabTimes()（BCAST_TICK 只给 header/activeTab，chip 批量用 REQ）
- *   6. 委托事件：activate / close-tab / close-all（M3 动效）
- *   7. beforeunload 通知 SW
+ *   4. 订阅 Port 广播的 tab 增量、tick 和状态变化
+ *   5. 委托事件：activate / close-tab / close-all（M3 动效）
  *
  * 里程碑：M6（历史统计面板）。
  */
@@ -32,7 +30,8 @@ import { burst as confettiBurst } from './utils/confetti.js';
 let lastState = null;  // 缓存 global state，更新 status 行用
 
 async function main() {
-  console.log(LOG_PREFIX, 'UI main bootstrap (v2.0.0 M9)');
+  const version = chrome.runtime.getManifest().version;
+  console.log(LOG_PREFIX, 'UI main bootstrap', version);
 
   try {
     await messaging.notifyUIReady();
@@ -59,7 +58,7 @@ async function main() {
   } catch (err) {
     header.updateStatus(0, []);
     const statusEl = $('.header .status');
-    if (statusEl) statusEl.textContent = `v2.0.0 · M9 · ⚠️ SW 连接失败：${err?.message || err}`;
+    if (statusEl) statusEl.textContent = `v${version} · ⚠️ SW 连接失败：${err?.message || err}`;
     console.error(LOG_PREFIX, 'snapshot failed', err);
     return;
   }
@@ -172,62 +171,38 @@ async function main() {
   });
 
   // ========== 订阅：每秒 tick ==========
-  // BCAST_TICK 的 payload：{now, todayMs, activeTabId, activeTabMs}
-  // 我们用它：
-  //   1. 直接更新 header（todayMs, isActive 从 activeTabId 是否存在推断）
-  //   2. 节流触发一次批量 tabTimes 刷新（chip badge + card 聚合）
-  //      —— 1s 一次批量 REQ 成本很低（就是读一个 Map），比让 SW broadcast 整个 times dict 更干净
-  let timesRefreshInFlight = false;
-  messaging.subscribeTick(async (payload) => {
+  // Port 广播一次性携带 header + 全部 tab 时间，避免每秒追加一轮 REQ IPC。
+  messaging.subscribeTick((payload) => {
     if (!payload) return;
-    // M8: 用 SW 的 isActive 真相，不从 activeTabId 推断（暂停时 activeTabId 仍非 null）
     const isActive = typeof payload.isActive === 'boolean' ? payload.isActive : (payload.activeTabId != null);
     header.updateTodayMs(payload.todayMs, isActive);
-
-    // M9: 刷新 header widget 的倒计时
     privateModeWidget.tickUpdate();
     focusTimerWidget.tickUpdate();
-
-    // 节流：上一次 REQ 还没回来就跳过这一轮
-    if (timesRefreshInFlight) return;
-    timesRefreshInFlight = true;
-    try {
-      const ids = tabsGrid.getAllTabIds();
-      if (ids.length === 0) return;
-      const resp = await messaging.getTabTimes(ids);
-      tabsGrid.applyTimeSnapshot({
-        tabTimes: resp?.tabTimes || {},
-        activeTabId: resp?.activeTabId ?? null,
-      });
-    } catch (err) {
-      // SW 短暂 suspended 等情况——下一秒重试即可
-    } finally {
-      timesRefreshInFlight = false;
-    }
+    tabsGrid.applyTimeSnapshot({
+      tabTimes: payload.tabTimes || {},
+      activeTabId: payload.activeTabId ?? null,
+    });
   });
 
   // ========== 订阅：pauseReasons/tracking 状态变化 ==========
   messaging.subscribeStateChange((payload) => {
     if (!payload) return;
+    const tracking = payload.tracking ?? lastState?.tracking;
+    const pauseReasons = payload.pauseReasons ?? tracking?.pauseReasons ?? [];
     lastState = {
       ...(lastState || {}),
-      tracking: payload.tracking,
+      ...(payload.blacklist !== undefined ? { blacklist: payload.blacklist } : {}),
+      ...(payload.privateMode !== undefined ? { privateMode: payload.privateMode } : {}),
+      ...(payload.focusTimer !== undefined ? { focusTimer: payload.focusTimer } : {}),
+      tracking,
     };
-    header.updateStateBadges({
-      pauseReasons: payload.pauseReasons,
-      tracking: payload.tracking,
-    });
+    header.updateStateBadges({ pauseReasons, tracking });
     const count = document.querySelectorAll('.tabChip:not(.tabChip--leaving)').length;
-    header.updateStatus(count, payload.pauseReasons || []);
-    // M9: 同步 header widget + 设置面板
-    privateModeWidget.update(payload.privateMode);
-    focusTimerWidget.update(payload.focusTimer);
+    header.updateStatus(count, pauseReasons);
+    // 部分状态广播不能清空未携带的 widget 状态。
+    if (payload.privateMode !== undefined) privateModeWidget.update(payload.privateMode);
+    if (payload.focusTimer !== undefined) focusTimerWidget.update(payload.focusTimer);
     settingsPanel.updateState(payload);
-  });
-
-  // ========== 离开通知 ==========
-  window.addEventListener('beforeunload', () => {
-    messaging.notifyUIGone().catch(() => { /* best-effort */ });
   });
 
   console.log(LOG_PREFIX, 'M9 ready,', tabs.length, 'tabs, todayMs =', todayResp?.totalMs);
