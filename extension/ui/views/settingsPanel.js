@@ -16,6 +16,7 @@
 import { h } from '../utils/dom.js';
 import * as messaging from '../messaging.js';
 import { LOG_PREFIX, IDLE_THRESHOLD_DEFAULT_SEC, IDLE_OPTIONS } from '../../shared/constants.js';
+import { renderAdvancedSettings } from './settingsAdvanced.js';
 
 /** @type {HTMLElement|null} */
 let panelEl = null;
@@ -26,6 +27,7 @@ let toggleBtn = null;
 let currentBlacklist = [];
 /** 当前 idle 阈值（秒），0 = 关闭 */
 let currentIdleThreshold = IDLE_THRESHOLD_DEFAULT_SEC;
+let currentConfig = null;
 
 // ========== 初始化 ==========
 
@@ -40,6 +42,7 @@ export function init(initialState = {}) {
   if (!toggleBtn || !panelEl) return;
 
   currentBlacklist = initialState.blacklist ?? [];
+  currentConfig = initialState.config ?? null;
 
   toggleBtn.addEventListener('click', () => {
     const isOpen = !panelEl.hidden;
@@ -67,9 +70,8 @@ export function init(initialState = {}) {
  * BCAST_STATE_CHANGE 回调。
  */
 export function updateState(state) {
-  if (state.blacklist !== undefined) {
-    currentBlacklist = state.blacklist;
-  }
+  if (state.blacklist !== undefined) currentBlacklist = state.blacklist;
+  if (state.config !== undefined) currentConfig = state.config;
   if (!panelEl || panelEl.hidden) return;
   renderPanel();
 }
@@ -81,6 +83,12 @@ function renderPanel() {
   panelEl.innerHTML = '';
   panelEl.appendChild(renderIdleThreshold());
   panelEl.appendChild(renderBlacklist());
+  if (currentConfig) {
+    panelEl.appendChild(renderAdvancedSettings(currentConfig, (config) => {
+      currentConfig = config;
+      if (panelEl && !panelEl.hidden) renderPanel();
+    }));
+  }
 }
 
 // ---------- Idle 阈值 ----------
@@ -161,15 +169,20 @@ function renderBlacklist() {
   });
   addRow.appendChild(input);
 
+  const feedback = h('p', { className: 'sp__feedback' });
   const addBtn = h('button', { className: 'sp__btn sp__btn--primary', textContent: '添加' });
   const doAdd = async () => {
-    const hostname = input.value.trim().toLowerCase();
+    const hostname = input.value.trim();
     if (!hostname) return;
     addBtn.disabled = true;
+    feedback.textContent = '';
     try {
-      await messaging.blacklistAdd(hostname);
+      const result = await messaging.blacklistAdd(hostname);
+      currentBlacklist = result.list || currentBlacklist;
       input.value = '';
+      feedback.textContent = `已添加 ${result.added}`;
     } catch (err) {
+      feedback.textContent = `添加失败：${err?.message || err}`;
       console.error(LOG_PREFIX, 'blacklistAdd failed', err);
     } finally {
       addBtn.disabled = false;
@@ -181,6 +194,7 @@ function renderBlacklist() {
   });
   addRow.appendChild(addBtn);
   section.appendChild(addRow);
+  section.appendChild(feedback);
 
   // 当前列表
   const list = currentBlacklist || [];

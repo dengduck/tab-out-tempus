@@ -1,95 +1,157 @@
-/**
- * ui/views/sidebar.js
- * --------------------
- * Save for Later 侧边栏。
- *
- * 功能：
- *   - 显示已保存的标签列表（标题 + URL + 保存时间）
- *   - 点击标题只打开（像收藏夹，不移除）
- *   - 点 × 删除
- *
- * 数据流：
- *   - 首帧：main.js 调 render(sidebarEl, savedList)
- *   - 新增保存：main.js 调 add(entry) 追加到 DOM
- *   - 删除：用户点 × → messaging.removeSaved → 移除 DOM
- *   - 打开：用户点标题 → 新开 tab（条目保留在列表中）
- *
- * 里程碑：M7。
- */
+/** Save for Later sidebar with local search and sorting. */
 
-import { h, $ } from '../utils/dom.js';
+import { h } from '../utils/dom.js';
 import * as messaging from '../messaging.js';
 
-/** @type {HTMLElement|null} */
 let rootEl = null;
+let listEl = null;
+let savedEntries = [];
+let searchQuery = '';
+let sortMode = 'newest';
+let onRemovedCallback = null;
 
 /** @type {Map<string, HTMLElement>} */
 const entryEls = new Map();
 
-/**
- * 首次渲染。
- * @param {HTMLElement} el #sidebar
- * @param {Array} savedList [{id, url, title, favIconUrl, savedAt}]
- */
-export function render(el, savedList = []) {
+function resolveRenderArgs(savedList, options) {
+  const entries = Array.isArray(savedList) ? savedList : [];
+  const config = Array.isArray(savedList) ? options : savedList;
+  const onRemoved = typeof config === 'function' ? config : config?.onRemoved;
+  return {
+    entries,
+    onRemoved: typeof onRemoved === 'function' ? onRemoved : null,
+  };
+}
+
+/** Initialize the sidebar. Alias of render for callers that prefer lifecycle naming. */
+export function init(el, savedList = [], options = {}) {
+  return render(el, savedList, options);
+}
+
+/** Render the complete sidebar. options may be an onRemoved callback or config object. */
+export function render(el, savedList = [], options = {}) {
   rootEl = el;
   if (!rootEl) return;
 
+  const resolved = resolveRenderArgs(savedList, options);
+  savedEntries = resolved.entries.map((entry) => ({ ...entry }));
+  onRemovedCallback = resolved.onRemoved;
+  searchQuery = '';
+  sortMode = 'newest';
   entryEls.clear();
-  rootEl.textContent = '';  // 清掉 CSS ::before stub
+
+  rootEl.textContent = '';
   rootEl.classList.add('sidebar--active');
 
   const header = h('div', { class: 'sidebar__header' }, [
     h('h3', { class: 'sidebar__title' }, ['🔖 稍后查看']),
-    h('span', { class: 'sidebar__count' }, [`${savedList.length}`]),
+    h('span', { class: 'sidebar__count' }, [String(savedEntries.length)]),
   ]);
   rootEl.appendChild(header);
+  rootEl.appendChild(createControls());
 
-  const list = h('div', { class: 'sidebar__list' });
-  for (const entry of savedList) {
-    const item = createEntryEl(entry);
-    list.appendChild(item);
-  }
-  rootEl.appendChild(list);
-
-  if (savedList.length === 0) {
-    showEmpty();
-  }
+  listEl = h('div', { class: 'sidebar__list' });
+  rootEl.appendChild(listEl);
+  renderEntryList();
 }
 
-/**
- * 追加一条新保存的条目（实时更新）。
- */
+/** Add or replace an entry and preserve the active search/sort controls. */
 export function add(entry) {
   if (!rootEl || !entry?.id) return;
-  removeEmpty();
-
-  const list = rootEl.querySelector('.sidebar__list');
-  if (!list) return;
-
-  const item = createEntryEl(entry);
-  list.prepend(item);  // 新的在最上面
+  savedEntries = [
+    { ...entry },
+    ...savedEntries.filter((saved) => saved.id !== entry.id),
+  ];
   updateCount();
+  renderEntryList();
 }
 
-/**
- * 从 DOM 移除一条条目（删除或恢复后调用）。
- */
+/** Remove an entry from the in-memory view. */
 export function remove(entryId) {
-  const el = entryEls.get(entryId);
-  if (el) {
-    el.remove();
-    entryEls.delete(entryId);
-  }
+  const next = savedEntries.filter((entry) => entry.id !== entryId);
+  if (next.length === savedEntries.length) return false;
+  savedEntries = next;
   updateCount();
-  if (entryEls.size === 0) showEmpty();
+  renderEntryList();
+  return true;
 }
 
-// ========== 内部 ==========
+function createControls() {
+  const search = h('input', {
+    class: 'sidebar__search',
+    type: 'search',
+    placeholder: '搜索标题或网址',
+    'aria-label': '搜索稍后查看',
+  });
+  search.value = searchQuery;
+  search.addEventListener('input', () => {
+    searchQuery = String(search.value || '').trim().toLocaleLowerCase();
+    renderEntryList();
+  });
+
+  const sort = h('select', {
+    class: 'sidebar__sort',
+    'aria-label': '排序稍后查看',
+  }, [
+    h('option', { value: 'newest' }, ['最新保存']),
+    h('option', { value: 'oldest' }, ['最早保存']),
+    h('option', { value: 'title' }, ['按标题']),
+  ]);
+  sort.value = sortMode;
+  sort.addEventListener('change', () => {
+    sortMode = ['newest', 'oldest', 'title'].includes(sort.value) ? sort.value : 'newest';
+    renderEntryList();
+  });
+
+  return h('div', { class: 'sidebar__controls' }, [search, sort]);
+}
+
+function visibleEntries() {
+  const filtered = searchQuery
+    ? savedEntries.filter((entry) => {
+      const title = String(entry.title || '').toLocaleLowerCase();
+      const url = String(entry.url || '').toLocaleLowerCase();
+      return title.includes(searchQuery) || url.includes(searchQuery);
+    })
+    : savedEntries.slice();
+
+  return filtered.sort((a, b) => {
+    if (sortMode === 'oldest') {
+      return Number(a.savedAt || 0) - Number(b.savedAt || 0);
+    }
+    if (sortMode === 'title') {
+      const aTitle = String(a.title || a.url || '');
+      const bTitle = String(b.title || b.url || '');
+      return aTitle.localeCompare(bTitle, undefined, { sensitivity: 'base' });
+    }
+    return Number(b.savedAt || 0) - Number(a.savedAt || 0);
+  });
+}
+
+function renderEntryList() {
+  if (!listEl) return;
+  listEl.textContent = '';
+  entryEls.clear();
+
+  const visible = visibleEntries();
+  for (const entry of visible) {
+    listEl.appendChild(createEntryEl(entry));
+  }
+
+  if (visible.length === 0) {
+    const message = savedEntries.length === 0 ? '还没有保存的标签' : '没有匹配的标签';
+    listEl.appendChild(h('p', { class: 'sidebar__empty' }, [message]));
+  }
+}
 
 function createEntryEl(entry) {
   const favicon = entry.favIconUrl
-    ? h('img', { class: 'sidebar__favicon', src: entry.favIconUrl, alt: '', onerror: (e) => { e.target.style.display = 'none'; } })
+    ? h('img', {
+      class: 'sidebar__favicon',
+      src: entry.favIconUrl,
+      alt: '',
+      onerror: (event) => { event.target.style.display = 'none'; },
+    })
     : h('span', { class: 'sidebar__favicon sidebar__favicon--placeholder' }, ['🔖']);
 
   const title = h('a', {
@@ -98,13 +160,12 @@ function createEntryEl(entry) {
     title: entry.url,
   }, [entry.title || entry.url || '(untitled)']);
 
-  title.addEventListener('click', async (e) => {
-    e.preventDefault();
-    // 像收藏夹一样：点击只打开，不移除。仅点 × 才移出（见 removeBtn）。
+  title.addEventListener('click', async (event) => {
+    event.preventDefault();
     try {
       await chrome.tabs.create({ url: entry.url, active: false });
-    } catch (err) {
-      console.error('[tempus] sidebar open failed', err);
+    } catch (error) {
+      console.error('[tempus] sidebar open failed', error);
     }
   });
 
@@ -118,14 +179,22 @@ function createEntryEl(entry) {
     try {
       await messaging.removeSaved(entry.id);
       remove(entry.id);
-    } catch (err) {
-      console.error('[tempus] sidebar remove failed', err);
+    } catch (error) {
+      console.error('[tempus] sidebar remove failed', error);
+      return;
+    }
+
+    if (onRemovedCallback) {
+      try {
+        await onRemovedCallback(entry.id);
+      } catch (error) {
+        console.error('[tempus] sidebar onRemoved failed', error);
+      }
     }
   });
 
   const time = new Date(entry.savedAt);
   const timeStr = `${time.getMonth() + 1}/${time.getDate()} ${String(time.getHours()).padStart(2, '0')}:${String(time.getMinutes()).padStart(2, '0')}`;
-
   const item = h('div', { class: 'sidebar__entry', 'data-entry-id': entry.id }, [
     favicon,
     h('div', { class: 'sidebar__entryBody' }, [
@@ -142,18 +211,5 @@ function createEntryEl(entry) {
 function updateCount() {
   if (!rootEl) return;
   const countEl = rootEl.querySelector('.sidebar__count');
-  if (countEl) countEl.textContent = String(entryEls.size);
-}
-
-function showEmpty() {
-  if (!rootEl) return;
-  const list = rootEl.querySelector('.sidebar__list');
-  if (list && !list.querySelector('.sidebar__empty')) {
-    list.appendChild(h('p', { class: 'sidebar__empty' }, ['还没有保存的标签']));
-  }
-}
-
-function removeEmpty() {
-  if (!rootEl) return;
-  rootEl.querySelector('.sidebar__empty')?.remove();
+  if (countEl) countEl.textContent = String(savedEntries.length);
 }

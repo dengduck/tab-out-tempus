@@ -1,44 +1,39 @@
 /**
- * ui/views/tabsGrid.js
- * ---------------------
- * 域名分组的 tab 网格（主视图）。
- *
- * 契约（ARCHITECTURE-v2 §8 / DECISIONS D11）：
- *   - render(tabs)                 首次全量渲染
- *   - applyChange(action, tabInfo) 增量 diff 更新（**禁止整页重绘**）
- *   - bindEvents(rootEl, handlers) 事件委托绑定（activate / close-tab / close-all）
- *
- * 里程碑：M2（render + 增量 + 委托事件）+ M5（chip badge）。
- *
- * 增量策略（M2 版，足够简单）：
- *   - added:   groupByDomain 重跑，找到对应 group；DOM 里有就 append chip；没有就 createCard 插入
- *   - removed: 找到 chip 移除；如果 group 空了就移除整张卡
- *   - updated: 若 hostname 变了 → 当作 remove+add；若只是 title/favicon 变 → 就地改那个 chip
- *   - moved:   只改 chip 的 data-window-id
- *
- * 为了实现简单，M2 保留一份 `currentTabs` 内存副本，作为增量时的 before-snapshot。
+ * Tab 网格协调器。首次 render 可全量绘制；tab 事件必须通过 applyChange 增量更新。
+ * currentTabs 保存 DOM 的数据镜像；分组和重复检测拆到独立模块。
  */
 
 import { h } from '../utils/dom.js';
 import { getHostname, isHomepage, groupByDomain } from '../utils/domain.js';
 import { normalizeUrl } from '../../shared/hostname.js';
-import { create as createCard, updateTime as updateCardTime, updateDupeButton } from '../components/domainCard.js';
-import { create as createChip, updateBadge as updateChipBadge, updateDupeBadge } from '../components/tabChip.js';
+import { create as createCard, updateTime as updateCardTime, updateBudget } from '../components/domainCard.js';
+import { create as createChip, updateBadge as updateChipBadge, updateSaved } from '../components/tabChip.js';
 import { render as renderHomepages } from './homepagesGroup.js';
+import { resolveBudget, budgetStatus } from './groupingView.js';
+import { appendDomainCard, renderDomainGroups, updateGroupingSection } from './tabsGridGrouping.js';
+import { getDuplicateTabIds as findDuplicateTabIds, refreshDuplicates as refreshDupeDom } from './tabsGridDuplicates.js';
 
 /** @type {HTMLElement|null} */
 let rootEl = null;
 
 /** @type {Map<number, any>} */
 const currentTabs = new Map();
+const savedUrls = new Set();
+let currentConfig = { groupMode: 'domain' };
 
 /**
  * 首次全量渲染。
  * @param {HTMLElement} root
  * @param {Array} tabs
  */
-export function render(root, tabs) {
+export function render(root, tabs, options = {}) {
   rootEl = root;
+  currentConfig = options.config || currentConfig;
+  savedUrls.clear();
+  for (const entry of options.saved || []) {
+    const normalized = normalizeUrl(entry.url);
+    if (normalized) savedUrls.add(normalized);
+  }
   currentTabs.clear();
   for (const t of tabs) if (typeof t.id === 'number') currentTabs.set(t.id, t);
 
@@ -48,9 +43,7 @@ export function render(root, tabs) {
   const homepagesCard = renderHomepages(homepages);
   if (homepagesCard) rootEl.appendChild(homepagesCard);
 
-  for (const g of groups) {
-    rootEl.appendChild(createCard(g.hostname, g.tabs));
-  }
+  renderDomainGroups(rootEl, groups, currentConfig);
 
   if (groups.length === 0 && homepages.length === 0) {
     rootEl.appendChild(h('p', { class: 'tabsGrid__empty' }, [
@@ -59,6 +52,50 @@ export function render(root, tabs) {
   }
 
   refreshDuplicates();
+  refreshSavedStates();
+}
+
+function groupingSignature(config) {
+  return JSON.stringify({
+    groupMode: config?.groupMode || 'domain',
+    categories: config?.categories || [],
+    domainCategories: config?.domainCategories || {},
+    customGroups: config?.customGroups || [],
+  });
+}
+
+export function setConfig(config) {
+  const previousSignature = groupingSignature(currentConfig);
+  currentConfig = config || { groupMode: 'domain' };
+  if (rootEl && groupingSignature(currentConfig) !== previousSignature) {
+    const saved = Array.from(savedUrls, (url) => ({ url }));
+    render(rootEl, Array.from(currentTabs.values()), { config: currentConfig, saved });
+  }
+}
+
+export function setSavedEntries(entries = []) {
+  savedUrls.clear();
+  for (const entry of entries) {
+    const normalized = normalizeUrl(entry.url);
+    if (normalized) savedUrls.add(normalized);
+  }
+  refreshSavedStates();
+}
+
+export function setUrlSaved(url, isSaved) {
+  const normalized = normalizeUrl(url);
+  if (!normalized) return;
+  if (isSaved) savedUrls.add(normalized);
+  else savedUrls.delete(normalized);
+  refreshSavedStates();
+}
+
+function refreshSavedStates() {
+  if (!rootEl) return;
+  for (const [id, tab] of currentTabs) {
+    const chip = rootEl.querySelector(`.tabChip[data-tab-id="${id}"]`);
+    updateSaved(chip, savedUrls.has(normalizeUrl(tab.url)));
+  }
 }
 
 /**
@@ -73,6 +110,7 @@ export function applyChange(action, tabInfo) {
     currentTabs.set(tabInfo.id, tabInfo);
     insertChipForTab(tabInfo);
     refreshDuplicates();
+    refreshSavedStates();
     return;
   }
 
@@ -173,11 +211,14 @@ export function animateRemoveChip(tabId) {
     chip.remove();
     if (card) {
       const remaining = card.querySelectorAll('.tabChip').length;
+      const section = card.closest('.groupingSection');
       if (remaining === 0) {
         card.remove();
+        updateGroupingSection(section);
         maybeShowEmptyState();
       } else {
         updateCardCount(card);
+        updateGroupingSection(section);
       }
     }
   }, 200);
@@ -216,7 +257,7 @@ function insertChipForTab(tabInfo) {
       if (card) rootEl.insertBefore(card, rootEl.firstChild);  // homepages 始终置顶
     } else {
       card = createCard(key, [tabInfo]);
-      rootEl.appendChild(card);
+      appendDomainCard(rootEl, card, key, currentConfig);
     }
     removeEmptyState();
     return;
@@ -224,8 +265,9 @@ function insertChipForTab(tabInfo) {
 
   // 已有 card → append chip + 更新 count
   const chipsWrap = card.querySelector('.domainCard__chips');
-  chipsWrap?.appendChild(createChip(tabInfo));
+  chipsWrap?.appendChild(createChip(tabInfo, { isSaved: savedUrls.has(normalizeUrl(tabInfo.url)) }));
   updateCardCount(card);
+  updateGroupingSection(card.closest('.groupingSection'));
 }
 
 function removeChipForTab(tabId) {
@@ -235,11 +277,14 @@ function removeChipForTab(tabId) {
   chip.remove();
   if (card) {
     const remaining = card.querySelectorAll('.tabChip').length;
+    const section = card.closest('.groupingSection');
     if (remaining === 0) {
       card.remove();
+      updateGroupingSection(section);
       maybeShowEmptyState();
     } else {
       updateCardCount(card);
+      updateGroupingSection(section);
     }
   }
 }
@@ -302,7 +347,7 @@ function attrEscape(s) {
  */
 export function applyTimeSnapshot(snapshot) {
   if (!rootEl || !snapshot || typeof snapshot !== 'object') return;
-  const { tabTimes = {}, activeTabId = null } = snapshot;
+  const { tabTimes = {}, domainTimes = {}, activeTabId = null } = snapshot;
 
   // 1. chip 级
   const chips = rootEl.querySelectorAll('.tabChip');
@@ -327,8 +372,11 @@ export function applyTimeSnapshot(snapshot) {
   cards.forEach((card) => {
     const host = card.getAttribute('data-hostname');
     if (!host) return;
-    const total = byHost.get(host) || 0;
-    updateCardTime(card, total);
+    const openTabTotal = byHost.get(host) || 0;
+    updateCardTime(card, openTabTotal);
+    const usedToday = domainTimes[host] ?? openTabTotal;
+    const budget = resolveBudget(host, currentConfig);
+    updateBudget(card, usedToday, budget, budgetStatus(usedToday, budget));
   });
 }
 
@@ -339,84 +387,9 @@ export function applyTimeSnapshot(snapshot) {
  * @returns {number[]}
  */
 export function getDuplicateTabIds(hostname) {
-  const urlMap = buildDupeMap();
-  const toClose = [];
-  for (const ids of urlMap.values()) {
-    if (ids.length < 2) continue;
-    // 过滤到指定域名（如果提供）
-    if (hostname) {
-      const tab0 = currentTabs.get(ids[0]);
-      if (!tab0) continue;
-      const host = isHomepage(tab0.url) ? '__homepages' : getHostname(tab0.url);
-      if (host !== hostname) continue;
-    }
-    // 保留 id 最小的（通常是最早打开的），关闭其余
-    const sorted = [...ids].sort((a, b) => a - b);
-    for (let i = 1; i < sorted.length; i++) toClose.push(sorted[i]);
-  }
-  return toClose;
+  return findDuplicateTabIds(currentTabs, hostname);
 }
 
-// ========== 重复标签检测 ==========
-
-/**
- * 构建 normalizedUrl → [tabId, ...] 映射。
- * @returns {Map<string, number[]>}
- */
-function buildDupeMap() {
-  const urlMap = new Map();
-  for (const [id, info] of currentTabs) {
-    const norm = normalizeUrl(info.url);
-    if (!norm) continue;
-    if (!urlMap.has(norm)) urlMap.set(norm, []);
-    urlMap.get(norm).push(id);
-  }
-  return urlMap;
-}
-
-/**
- * 全量刷新所有 chip 的重复 badge + 所有 domainCard 的"关闭重复"按钮。
- * 每次 render / applyChange 后调用。
- */
 function refreshDuplicates() {
-  if (!rootEl) return;
-  const urlMap = buildDupeMap();
-
-  // 反转：tabId → dupeCount（该 URL 出现次数）
-  const tabDupeCount = new Map();
-  for (const ids of urlMap.values()) {
-    for (const id of ids) tabDupeCount.set(id, ids.length);
-  }
-
-  // 1. 更新每个 chip 的重复 badge
-  const chips = rootEl.querySelectorAll('.tabChip');
-  chips.forEach((chip) => {
-    const id = Number(chip.getAttribute('data-tab-id'));
-    if (!Number.isFinite(id)) return;
-    updateDupeBadge(chip, tabDupeCount.get(id) || 0);
-  });
-
-  // 2. 按域名统计应关闭的重复数，更新 domainCard 按钮
-  const hostDupeClose = new Map();  // hostname → count of tabs to close
-  for (const [norm, ids] of urlMap) {
-    if (ids.length < 2) continue;
-    const tab0 = currentTabs.get(ids[0]);
-    if (!tab0) continue;
-    const host = isHomepage(tab0.url) ? '__homepages' : getHostname(tab0.url);
-    if (!host) continue;
-    // 该 URL 组要关闭的 = ids.length - 1（保留一个）
-    hostDupeClose.set(host, (hostDupeClose.get(host) || 0) + (ids.length - 1));
-  }
-
-  const cards = rootEl.querySelectorAll('.domainCard');
-  cards.forEach((card) => {
-    const host = card.getAttribute('data-hostname');
-    if (!host) return;
-    updateDupeButton(card, hostDupeClose.get(host) || 0);
-  });
-}
-
-/** 给 main.js 查询当前所有 open tabId（用来批量请求 SW 的时间快照） */
-export function getAllTabIds() {
-  return Array.from(currentTabs.keys());
+  refreshDupeDom(rootEl, currentTabs);
 }

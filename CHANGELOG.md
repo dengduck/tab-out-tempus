@@ -4,6 +4,29 @@ All notable changes to **Tabpus** are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [2.0.2] — 2026-07-31
+
+### Added
+- **Save for Later library**: URL deduplication, saved-state indicators, search, and newest/oldest/title sorting.
+- **History data controls**: JSON/CSV export, full history clearing, and automatic retention for 30/90/180/365 days.
+- **Focus completion notifications** using the minimal `notifications` permission.
+- **Focus strict mode**: Exact/wildcard allowlist, extension-owned blocked page, temporary host allowance, and blocked-tab restoration after stopping.
+- **Theme control**: System, light, and dark themes.
+- **Domain organization**: Six default categories, user categories, exact-domain daily budgets, budget warnings, and custom groups.
+
+### Changed
+- Excluded-domain input now accepts full URLs, paths, mixed case, `www.`, and bare hostnames, then stores one canonical hostname.
+- Storage write/remove failures now propagate to the caller instead of being reported as success.
+- Runtime configuration updates are serialized and broadcast to all open Tabpus pages.
+- Today domain totals retain closed-tab usage so budget calculations remain accurate.
+- Permissions are reduced by removing unused `activeTab` and `sessions`; `notifications` is added for requested alerts.
+- Browser tests now use an external MV3-CSP-compatible pure-test runner; Node coverage expands to 99 cases plus a cold-alarm Service Worker smoke test.
+
+### Fixed
+- History clearing now pauses accounting, flushes pending slices, clears only `timeLog.*`, resets today's caches, and resumes without resurrecting deleted data.
+- Retention cutoffs use local calendar days rather than fixed 24-hour durations, preserving DST correctness.
+- Focus and Private Mode persistence now changes in-memory state only after durable writes succeed.
+
 ## [2.0.1] — 2026-07-23
 
 ### Fixed

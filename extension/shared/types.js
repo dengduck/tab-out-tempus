@@ -10,7 +10,7 @@
 
 /**
  * TimeTracker 的暂停原因枚举。见 ARCHITECTURE-v2.md §3.1 / DECISIONS-v2.md D9。
- * @typedef {'window-blur'|'idle'|'private-mode'|'blacklist'|'no-active-tab'} PauseReason
+ * @typedef {'window-blur'|'idle'|'private-mode'|'blacklist'|'no-active-tab'|'history-clear'} PauseReason
  */
 
 /**
@@ -20,6 +20,7 @@
  * @property {number} e   结束时间戳（UTC 毫秒）
  * @property {string} h   hostname
  * @property {number} [tid] tab id（可选；tab 关闭后仍保留在日志中）
+ * @property {string} [id] 幂等写入 ID（恢复 pending slice 时防重复）
  */
 
 /**
@@ -48,8 +49,9 @@
  * @typedef {Object} GlobalState
  * @property {TrackingState} tracking
  * @property {{active: boolean, endTime?: number, remainingMs?: number}|null} privateMode
- * @property {{active: boolean, remainingMs?: number, strict?: boolean}|null} focusTimer
+ * @property {{active:boolean,startTime:number,endTime:number,durationMs:number,remainingMs:number,strict:boolean,allowedHosts:string[]}|null} focusTimer
  * @property {Array<string>} blacklist
+ * @property {Object} config
  */
 
 export {};  // 标记为 module，便于 bundler / Chrome 识别

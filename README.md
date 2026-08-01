@@ -30,9 +30,10 @@ The agent will walk you through it. Takes about 1 minute.
 - **Close tabs with style** with swoosh sound + confetti burst
 - **Duplicate detection** flags when you have the same page open twice, with one-click cleanup
 - **Click any tab to jump to it** across windows, no new tab opened
-- **Save for later** bookmark tabs to a checklist before closing them
-- **Localhost grouping** shows port numbers next to each tab so you can tell your vibe coding projects apart
-- **Expandable groups** show the first 8 tabs with a clickable "+N more"
+- **Save for later library** keeps bookmarked pages until you explicitly remove them, with URL deduplication, search, and sorting
+- **Flexible grouping** switches between domains, six built-in categories, and your own custom groups
+- **Light / dark / system themes** for day and night use
+- **Localhost grouping** preserves port numbers so local projects stay distinct
 - **100% local** your data never leaves your machine
 - **Pure Chrome extension** no server, no Node.js, no npm, no setup beyond loading the extension
 
@@ -40,19 +41,20 @@ The agent will walk you through it. Takes about 1 minute.
 - **Session time tracking** shows how long you've spent on each domain in real time
 - **Per-hostname timer badge** live-updates on each domain card as you browse
 - **History stats** switch between Today / Week / Month / Year views to see where your time went
-- **Privacy blocklist** exclude specific domains from all statistics
-- **Productivity banner** shows a warm, encouraging summary at the top of Today and Week views
+- **Excluded domains** accepts a hostname or full URL and excludes the normalized domain from all statistics
+- **Daily domain budgets** show warning/exceeded states and send a one-time completion alert
 - **24-hour heatmap** visualizes your daily browsing intensity per domain (Today view)
-- **Tab staleness tracking** badges domains that haven't been visited in 7+ days
 
 ### Focus & Privacy
-- **Privacy mode (focus timer)** pauses all time tracking for a chosen duration (15min / 30min / 1h / 2h / 8h / until midnight) — perfect for handling sensitive tasks without leaving a trace
-- **Simultaneous domain detection** warns you when too many domains are open at once, suggesting consolidation
-- **Tab nap / dormancy** puts idle tabs to sleep using Chrome's native tab discard API to save memory; wake them with one click (💤 badge + dimmed card)
+- **Private Mode** pauses all tracking for a selected duration and resumes automatically
+- **Focus Timer** provides a visible countdown and completion notification
+- **Strict Focus** allows only configured exact or wildcard domains, redirects distractions to a local blocked page, and restores blocked tabs when focus ends
+- **Configurable idle detection** pauses tracking after 30s / 1m / 3m / 5m / 10m, or can be disabled; audible tabs are exempt
 
 ### Data & History
-- **Bulk history export** download all your browsing stats as a JSON file for backup
-- **History import** restore your stats when migrating or reinstalling the extension
+- **JSON and CSV export** downloads the complete local time ledger
+- **Retention controls** keep history forever or prune records older than 30 / 90 / 180 / 365 days
+- **Safe clearing** clears only time-history shards without deleting saved pages or settings
 
 ---
 
@@ -87,9 +89,9 @@ You open a new tab
   -> Close groups you're done with (swoosh + confetti)
   -> Save tabs for later before closing them
   -> Switch to Week/Month/Year to review your browsing history
-  -> Enable Privacy Mode when you need focus without tracking
-  -> Put tabs to sleep to save memory, wake them with one click
-  -> Export your history before reinstalling, import it after
+  -> Enable Private Mode when you do not want activity recorded
+  -> Start Focus Timer, optionally in strict allowlist mode
+  -> Export history as JSON/CSV or set an automatic retention window
 ```
 
 Everything runs inside the Chrome extension. No external server, no API calls, no data sent anywhere. Saved tabs and browsing history are stored in `chrome.storage.local`.

@@ -16,6 +16,7 @@ class FakeElement {
     this.children = [];
     this.parentNode = null;
     this.className = '';
+    this.value = '';
     this._textContent = '';
     this.attributes = new Map();
     this.listeners = new Map();
@@ -60,9 +61,13 @@ class FakeElement {
     this.listeners.set(type, handlers);
   }
 
+  async dispatch(type) {
+    const event = { target: this, preventDefault() {} };
+    await Promise.all((this.listeners.get(type) || []).map((handler) => handler(event)));
+  }
+
   async click() {
-    const event = { preventDefault() {} };
-    await Promise.all((this.listeners.get('click') || []).map((handler) => handler(event)));
+    await this.dispatch('click');
   }
 
   querySelector(selector) {
@@ -92,59 +97,114 @@ function installDom() {
   };
 }
 
-function savedEntry() {
+function savedEntry(overrides = {}) {
   return {
     id: 'saved-1',
     url: 'https://example.com/article',
     title: 'Example article',
     favIconUrl: '',
     savedAt: new Date(2026, 0, 2, 3, 4).getTime(),
+    ...overrides,
   };
+}
+
+function installChrome(removedIds = []) {
+  const created = [];
+  chrome.tabs = {
+    create: async (options) => { created.push(options); },
+  };
+  chrome.runtime = {
+    sendMessage: async (message) => {
+      if (message.type === 'REQ_REMOVE_SAVED') removedIds.push(message.id);
+      return { ok: true, data: { removed: message.id } };
+    },
+  };
+  return created;
+}
+
+function visibleTitles(root) {
+  return root.querySelectorAll('.sidebar__entryTitle').map((element) => element.textContent);
 }
 
 suite('Save for Later sidebar', () => {
   test('clicking title opens tab but keeps saved entry', async () => {
     installDom();
     const root = new FakeElement('aside');
-    const created = [];
-    let storageRemoveCount = 0;
-    chrome.tabs = {
-      create: async (options) => { created.push(options); },
-    };
-    chrome.runtime = {
-      sendMessage: async (message) => {
-        if (message.type === 'REQ_REMOVE_SAVED') storageRemoveCount++;
-        return { ok: true, data: {} };
-      },
-    };
+    const removedIds = [];
+    const created = installChrome(removedIds);
 
     sidebar.render(root, [savedEntry()]);
     await root.querySelector('.sidebar__entryTitle').click();
 
     assert.deepEqual(created, [{ url: 'https://example.com/article', active: false }]);
-    assert.equal(storageRemoveCount, 0, 'opening must not remove saved entry');
+    assert.deepEqual(removedIds, [], 'opening must not remove saved entry');
     assert.equal(root.querySelectorAll('.sidebar__entry').length, 1, 'entry stays visible');
     assert.equal(root.querySelector('.sidebar__count').textContent, '1');
   });
 
-  test('clicking remove button deletes storage entry and DOM item', async () => {
+  test('clicking remove deletes the item and calls optional callback', async () => {
     installDom();
     const root = new FakeElement('aside');
     const removedIds = [];
-    chrome.tabs = { create: async () => {} };
-    chrome.runtime = {
-      sendMessage: async (message) => {
-        if (message.type === 'REQ_REMOVE_SAVED') removedIds.push(message.id);
-        return { ok: true, data: { removed: message.id } };
-      },
-    };
+    const callbackIds = [];
+    installChrome(removedIds);
 
-    sidebar.render(root, [savedEntry()]);
+    sidebar.init(root, [savedEntry()], {
+      onRemoved: async (id) => { callbackIds.push(id); },
+    });
     await root.querySelector('.sidebar__entryRemove').click();
 
     assert.deepEqual(removedIds, ['saved-1']);
+    assert.deepEqual(callbackIds, ['saved-1']);
     assert.equal(root.querySelectorAll('.sidebar__entry').length, 0);
     assert.equal(root.querySelector('.sidebar__count').textContent, '0');
     assert.ok(root.querySelector('.sidebar__empty'), 'empty state shown after removal');
+  });
+
+  test('search matches title and URL case-insensitively', async () => {
+    installDom();
+    const root = new FakeElement('aside');
+    installChrome();
+    sidebar.render(root, [
+      savedEntry({ id: 'alpha', title: 'Alpha Guide', url: 'https://example.com/a' }),
+      savedEntry({ id: 'docs', title: 'Second item', url: 'https://docs.example.com/needle' }),
+      savedEntry({ id: 'other', title: 'Other', url: 'https://other.example.com' }),
+    ]);
+
+    const search = root.querySelector('.sidebar__search');
+    search.value = 'ALPHA';
+    await search.dispatch('input');
+    assert.deepEqual(visibleTitles(root), ['Alpha Guide']);
+
+    search.value = 'docs.example.com';
+    await search.dispatch('input');
+    assert.deepEqual(visibleTitles(root), ['Second item']);
+
+    search.value = 'missing';
+    await search.dispatch('input');
+    assert.deepEqual(visibleTitles(root), []);
+    assert.equal(root.querySelector('.sidebar__empty').textContent, '没有匹配的标签');
+  });
+
+  test('sorts by newest, oldest, and title', async () => {
+    installDom();
+    const root = new FakeElement('aside');
+    installChrome();
+    sidebar.render(root, [
+      savedEntry({ id: 'beta', title: 'Beta', savedAt: 30 }),
+      savedEntry({ id: 'zulu', title: 'Zulu', savedAt: 10 }),
+      savedEntry({ id: 'alpha', title: 'alpha', savedAt: 20 }),
+    ]);
+
+    assert.deepEqual(visibleTitles(root), ['Beta', 'alpha', 'Zulu']);
+
+    const sort = root.querySelector('.sidebar__sort');
+    sort.value = 'oldest';
+    await sort.dispatch('change');
+    assert.deepEqual(visibleTitles(root), ['Zulu', 'alpha', 'Beta']);
+
+    sort.value = 'title';
+    await sort.dispatch('change');
+    assert.deepEqual(visibleTitles(root), ['alpha', 'Beta', 'Zulu']);
   });
 });

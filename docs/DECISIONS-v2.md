@@ -566,5 +566,16 @@ chrome.storage.session:
 
 ---
 
-_Last updated: 2026-04-20（M4 完成后深夜补丁 #001+#002，追加 D17-D23，覆盖时间模型收敛、Private Mode 与不计时域名正交定义、功能分版、参考项目致谢）_
+## D24. v2.0.2 配置、分组、预算与 Strict Mode 落地（2026-07-31）
 
+- 所有新增用户设置统一存入一个版本化 `config` 文档，由 `configService` 串行写入，避免并发覆盖。
+- 历史 `timeLog` 继续是唯一时间真相源；分类、自定义分组和预算均按 slice 的 hostname 派生，不写入历史 slice。
+- 预算第一版采用**精确域名每日预算**：达到预算后卡片标红并只通知一次，不强制阻断；分类用于聚合视图，自定义组优先于分类。
+- Focus strict 采用 `tabs.update` 跳转插件自带 `blocked.html`，支持精确域名和 `*.domain`，不增加 host permissions、webNavigation 或 DNR。
+- strict 被阻断的原 URL 与 token 存 `storage.local`，保证 SW 重启后仍可恢复；停止/到期时恢复被阻断标签。
+- UI 主题支持 system/light/dark；稍后查看升级为去重收藏库；历史支持 JSON/CSV 导出、清空和按本地日历天保留。
+- 存储写入失败必须向调用方抛出，内存状态只能在持久化成功后提交。
+
+---
+
+_Last updated: 2026-07-31（追加 D24，并完成 D19/D21 的首版实现）_

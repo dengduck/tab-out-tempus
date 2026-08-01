@@ -19,30 +19,31 @@ import { LOG_PREFIX, ALARM_PERIOD_S } from '../shared/constants.js';
 import * as timeTracker from './timeTracker.js';
 import * as privateMode from './privateMode.js';
 import * as focusTimer from './focusTimer.js';
+import * as featureHub from './featureHub.js';
 
 const ALARM_TICK = 'tempus-tick';
 
 let initialized = false;
 
-export function init() {
+export async function handleAlarm(alarm) {
+  if (alarm.name === ALARM_TICK) {
+    await timeTracker.tick();
+    await featureHub.onTick();
+    return;
+  }
+  const results = await Promise.allSettled([
+    privateMode.onAlarm(alarm.name),
+    focusTimer.onAlarm(alarm.name),
+  ]);
+  for (const result of results) {
+    if (result.status === 'rejected') console.error(LOG_PREFIX, 'alarm handler failed', result.reason);
+  }
+}
+
+export async function init() {
   if (initialized) return;
-  initialized = true;
-
-  // chrome.alarms.create 的 periodInMinutes 最小支持 0.5（Chrome 120+ 放宽了，但仍有下限）
   const periodMin = Math.max(ALARM_PERIOD_S / 60, 0.5);
-
-  chrome.alarms.create(ALARM_TICK, { periodInMinutes: periodMin });
-  chrome.alarms.onAlarm.addListener((alarm) => {
-    if (alarm.name === ALARM_TICK) {
-      timeTracker.tick().catch((err) =>
-        console.error(LOG_PREFIX, 'tick failed', err)
-      );
-    } else {
-      // M8: 分发给各模块
-      privateMode.onAlarm(alarm.name);
-      focusTimer.onAlarm(alarm.name);
-    }
-  });
-
+  await chrome.alarms.create(ALARM_TICK, { periodInMinutes: periodMin });
+  initialized = true;
   console.log(LOG_PREFIX, 'alarms init, tick every', periodMin, 'min');
 }

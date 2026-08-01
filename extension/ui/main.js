@@ -26,6 +26,7 @@ import { LOG_PREFIX } from '../shared/constants.js';
 import { $ } from './utils/dom.js';
 import { playSwoosh } from './utils/audio.js';
 import { burst as confettiBurst } from './utils/confetti.js';
+import { applyTheme } from './theme.js';
 
 let lastState = null;  // 缓存 global state，更新 status 行用
 
@@ -64,10 +65,19 @@ async function main() {
   }
 
   lastState = state;
+  let savedEntries = savedResp?.saved || [];
+  let resyncing = false;
+  const queuedBroadcasts = [];
+  const queueDuringResync = (type, payload) => {
+    if (!resyncing) return false;
+    queuedBroadcasts.push({ type, payload });
+    return true;
+  };
+  applyTheme(state.config?.theme || 'system');
   const tabs = tabsResp?.tabs || [];
 
   // 首次渲染
-  tabsGrid.render(gridEl, tabs);
+  tabsGrid.render(gridEl, tabs, { saved: savedEntries, config: state.config });
   header.render({
     todayMs: todayResp?.totalMs ?? 0,
     isActive: !!state.tracking?.isActive,
@@ -77,6 +87,7 @@ async function main() {
   // 首帧 chip/card 时长
   tabsGrid.applyTimeSnapshot({
     tabTimes: timesResp?.tabTimes || {},
+    domainTimes: timesResp?.domainTimes || {},
     activeTabId: timesResp?.activeTabId ?? null,
   });
 
@@ -85,11 +96,17 @@ async function main() {
 
   // M7: 初始化 Save for Later 侧边栏
   const sidebarEl = $('#sidebar');
-  sidebar.render(sidebarEl, savedResp?.saved || []);
+  const handleSavedRemoved = () => {
+    messaging.getSaved().then(({ saved }) => {
+      savedEntries = saved || [];
+      tabsGrid.setSavedEntries(savedEntries);
+    }).catch(() => {});
+  };
+  sidebar.render(sidebarEl, savedEntries, { onRemoved: handleSavedRemoved });
 
-  // M9: 初始化设置面板（只有 Blacklist）
   settingsPanel.init({
     blacklist: state.blacklist ?? [],
+    config: state.config,
   });
 
   // M9: Header 快捷控件
@@ -98,6 +115,98 @@ async function main() {
 
   // M9: 首次安装欢迎横幅（7 天后自动消失或用户点 × 关掉）
   welcomeBanner.init();
+
+  function applyTabChange(payload) {
+    tabsGrid.applyChange(payload.action, payload.tabInfo);
+    const count = document.querySelectorAll('.tabChip:not(.tabChip--leaving)').length;
+    header.updateStatus(count, lastState?.tracking?.pauseReasons || []);
+  }
+
+  function applyTick(payload) {
+    const isActive = typeof payload.isActive === 'boolean' ? payload.isActive : (payload.activeTabId != null);
+    header.updateTodayMs(payload.todayMs, isActive);
+    privateModeWidget.tickUpdate();
+    focusTimerWidget.tickUpdate();
+    tabsGrid.applyTimeSnapshot({
+      tabTimes: payload.tabTimes || {}, domainTimes: payload.domainTimes || {},
+      activeTabId: payload.activeTabId ?? null,
+    });
+  }
+
+  function applySaved(payload) {
+    if (!Array.isArray(payload?.saved)) return;
+    savedEntries = payload.saved;
+    sidebar.render(sidebarEl, savedEntries, { onRemoved: handleSavedRemoved });
+    tabsGrid.setSavedEntries(savedEntries);
+  }
+
+  function applyConfig(payload) {
+    if (!payload?.config) return;
+    lastState = { ...(lastState || {}), config: payload.config };
+    applyTheme(payload.config.theme || 'system');
+    tabsGrid.setConfig(payload.config);
+    settingsPanel.updateState({ config: payload.config });
+  }
+
+  function applyState(payload) {
+    const tracking = payload.tracking ?? lastState?.tracking;
+    const pauseReasons = payload.pauseReasons ?? tracking?.pauseReasons ?? [];
+    lastState = {
+      ...(lastState || {}),
+      ...(payload.blacklist !== undefined ? { blacklist: payload.blacklist } : {}),
+      ...(payload.privateMode !== undefined ? { privateMode: payload.privateMode } : {}),
+      ...(payload.focusTimer !== undefined ? { focusTimer: payload.focusTimer } : {}),
+      tracking,
+    };
+    header.updateStateBadges({ pauseReasons, tracking });
+    const count = document.querySelectorAll('.tabChip:not(.tabChip--leaving)').length;
+    header.updateStatus(count, pauseReasons);
+    if (payload.privateMode !== undefined) privateModeWidget.update(payload.privateMode);
+    if (payload.focusTimer !== undefined) focusTimerWidget.update(payload.focusTimer);
+    settingsPanel.updateState(payload);
+  }
+
+  function replayQueuedBroadcasts() {
+    while (queuedBroadcasts.length) {
+      const { type, payload } = queuedBroadcasts.shift();
+      if (type === 'tab') applyTabChange(payload);
+      else if (type === 'tick') applyTick(payload);
+      else if (type === 'saved') applySaved(payload);
+      else if (type === 'config') applyConfig(payload);
+      else if (type === 'state') applyState(payload);
+    }
+  }
+
+  async function resyncAfterReconnect() {
+    if (resyncing) return;
+    resyncing = true;
+    try {
+      const [nextState, nextTabs, nextToday, nextTimes, nextSaved] = await Promise.all([
+        messaging.getState(), messaging.getTabs(), messaging.getTodayWork(),
+        messaging.getTabTimes(), messaging.getSaved(),
+      ]);
+      lastState = nextState;
+      savedEntries = nextSaved?.saved || [];
+      applyTheme(nextState.config?.theme || 'system');
+      tabsGrid.render(gridEl, nextTabs?.tabs || [], { saved: savedEntries, config: nextState.config });
+      tabsGrid.applyTimeSnapshot({
+        tabTimes: nextTimes?.tabTimes || {}, domainTimes: nextTimes?.domainTimes || {},
+        activeTabId: nextTimes?.activeTabId ?? null,
+      });
+      sidebar.render(sidebarEl, savedEntries, { onRemoved: handleSavedRemoved });
+      settingsPanel.updateState({ blacklist: nextState.blacklist, config: nextState.config });
+      privateModeWidget.update(nextState.privateMode ?? null);
+      focusTimerWidget.update(nextState.focusTimer ?? null);
+      header.updateTodayMs(nextToday?.totalMs ?? 0, !!nextState.tracking?.isActive);
+      header.updateStatus((nextTabs?.tabs || []).length, nextState.tracking?.pauseReasons || []);
+    } catch (err) {
+      console.error(LOG_PREFIX, 'Port reconnect resync failed', err);
+    } finally {
+      resyncing = false;
+      replayQueuedBroadcasts();
+    }
+  }
+  messaging.subscribeReconnect(resyncAfterReconnect);
 
   // 事件委托
   tabsGrid.bindEvents(gridEl, {
@@ -144,7 +253,11 @@ async function main() {
     onSaveForLater: async (tabId) => {
       try {
         const resp = await messaging.saveForLater(tabId);
-        if (resp?.entry) sidebar.add(resp.entry);
+        if (resp?.entry && resp.created) {
+          sidebar.add(resp.entry);
+          savedEntries = [resp.entry, ...savedEntries];
+        }
+        if (resp?.entry) tabsGrid.setUrlSaved(resp.entry.url, true);
       } catch (err) {
         console.error(LOG_PREFIX, 'saveForLater failed', err);
       }
@@ -164,48 +277,34 @@ async function main() {
 
   // ========== 订阅：tab 增量 ==========
   messaging.subscribeTabChange((payload) => {
-    if (!payload) return;
-    tabsGrid.applyChange(payload.action, payload.tabInfo);
-    const count = document.querySelectorAll('.tabChip:not(.tabChip--leaving)').length;
-    header.updateStatus(count, lastState?.tracking?.pauseReasons || []);
+    if (!payload || queueDuringResync('tab', payload)) return;
+    applyTabChange(payload);
   });
 
   // ========== 订阅：每秒 tick ==========
   // Port 广播一次性携带 header + 全部 tab 时间，避免每秒追加一轮 REQ IPC。
   messaging.subscribeTick((payload) => {
-    if (!payload) return;
-    const isActive = typeof payload.isActive === 'boolean' ? payload.isActive : (payload.activeTabId != null);
-    header.updateTodayMs(payload.todayMs, isActive);
-    privateModeWidget.tickUpdate();
-    focusTimerWidget.tickUpdate();
-    tabsGrid.applyTimeSnapshot({
-      tabTimes: payload.tabTimes || {},
-      activeTabId: payload.activeTabId ?? null,
-    });
+    if (!payload || queueDuringResync('tick', payload)) return;
+    applyTick(payload);
   });
 
   // ========== 订阅：pauseReasons/tracking 状态变化 ==========
-  messaging.subscribeStateChange((payload) => {
-    if (!payload) return;
-    const tracking = payload.tracking ?? lastState?.tracking;
-    const pauseReasons = payload.pauseReasons ?? tracking?.pauseReasons ?? [];
-    lastState = {
-      ...(lastState || {}),
-      ...(payload.blacklist !== undefined ? { blacklist: payload.blacklist } : {}),
-      ...(payload.privateMode !== undefined ? { privateMode: payload.privateMode } : {}),
-      ...(payload.focusTimer !== undefined ? { focusTimer: payload.focusTimer } : {}),
-      tracking,
-    };
-    header.updateStateBadges({ pauseReasons, tracking });
-    const count = document.querySelectorAll('.tabChip:not(.tabChip--leaving)').length;
-    header.updateStatus(count, pauseReasons);
-    // 部分状态广播不能清空未携带的 widget 状态。
-    if (payload.privateMode !== undefined) privateModeWidget.update(payload.privateMode);
-    if (payload.focusTimer !== undefined) focusTimerWidget.update(payload.focusTimer);
-    settingsPanel.updateState(payload);
+  messaging.subscribeSavedChange((payload) => {
+    if (!payload || queueDuringResync('saved', payload)) return;
+    applySaved(payload);
   });
 
-  console.log(LOG_PREFIX, 'M9 ready,', tabs.length, 'tabs, todayMs =', todayResp?.totalMs);
+  messaging.subscribeConfigChange((payload) => {
+    if (!payload || queueDuringResync('config', payload)) return;
+    applyConfig(payload);
+  });
+
+  messaging.subscribeStateChange((payload) => {
+    if (!payload || queueDuringResync('state', payload)) return;
+    applyState(payload);
+  });
+
+  console.log(LOG_PREFIX, 'v2.0.2 ready,', tabs.length, 'tabs, todayMs =', todayResp?.totalMs);
 }
 
 /**

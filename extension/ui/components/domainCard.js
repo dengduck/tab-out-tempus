@@ -42,6 +42,7 @@ export function create(hostname, tabs) {
       h('span', { class: 'domainCard__count' }, [` (${tabs.length})`]),
     ]),
     h('span', { class: 'domainCard__time', hidden: '' }),
+    h('span', { class: 'domainCard__budget', hidden: '' }),
     h('button', {
       class: 'domainCard__closeDupes',
       'data-action': 'close-duplicates',
@@ -84,6 +85,15 @@ export function updateTime(cardEl, ms) {
  * @param {HTMLElement} cardEl .domainCard 根
  * @param {number} dupeCount 该卡中重复的 tab 数（将被关闭的数量）
  */
+export function updateBudget(cardEl, usedMs, budgetMs, status) {
+  const el = cardEl?.querySelector('.domainCard__budget');
+  if (!el) return;
+  if (!budgetMs) { el.hidden = true; return; }
+  el.hidden = false;
+  el.className = `domainCard__budget groupingBudget groupingBudget--${status}`;
+  el.textContent = `${formatDurationCompact(usedMs)} / ${formatDurationCompact(budgetMs)}`;
+}
+
 export function updateDupeButton(cardEl, dupeCount) {
   if (!cardEl) return;
   const btn = cardEl.querySelector('.domainCard__closeDupes');
@@ -96,4 +106,3 @@ export function updateDupeButton(cardEl, dupeCount) {
   const text = `关闭 ${dupeCount} 个重复`;
   if (btn.textContent !== text) btn.textContent = text;
 }
-

@@ -54,76 +54,55 @@ function broadcast(action, tabInfo) {
  */
 export async function init(deps = {}) {
   if (initialized) return;
-  initialized = true;
   emit = deps.emit || null;
-
-  // 初次灌满 map
-  try {
-    const all = await chrome.tabs.query({});
-    tabs.clear();
-    for (const t of all) {
-      if (typeof t.id === 'number') tabs.set(t.id, toInfo(t));
-    }
-    console.log(LOG_PREFIX, 'tabRegistry init,', tabs.size, 'tabs');
-  } catch (err) {
-    console.error(LOG_PREFIX, 'tabRegistry init query failed', err);
+  const all = await chrome.tabs.query({});
+  tabs.clear();
+  for (const tab of all) {
+    if (typeof tab.id === 'number') tabs.set(tab.id, toInfo(tab));
   }
+  initialized = true;
+  console.log(LOG_PREFIX, 'tabRegistry init,', tabs.size, 'tabs');
+}
 
-  // 事件监听。SW 重启后这些 listener 会重注册（顶层 import 再跑一遍 init）
-  chrome.tabs.onCreated.addListener((tab) => {
-    if (typeof tab.id !== 'number') return;
-    const info = toInfo(tab);
-    tabs.set(tab.id, info);
-    broadcast('added', info);
-  });
+export function onCreated(tab) {
+  if (typeof tab?.id !== 'number') return;
+  const info = toInfo(tab);
+  tabs.set(tab.id, info);
+  broadcast('added', info);
+}
 
-  chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-    if (!tabs.has(tabId)) {
-      // 第一次见这个 tab（SW 冷启动期间创建的）
-      if (typeof tab?.id === 'number') {
-        const info = toInfo(tab);
-        tabs.set(tabId, info);
-        broadcast('added', info);
-        return;
-      }
-      return;
-    }
-    const prev = tabs.get(tabId);
-    // 只处理我们关心的字段变化
-    const next = {
-      ...prev,
-      url: changeInfo.url || tab?.url || prev.url,
-      title: changeInfo.title || tab?.title || prev.title,
-      favIconUrl: changeInfo.favIconUrl || tab?.favIconUrl || prev.favIconUrl,
-      windowId: tab?.windowId ?? prev.windowId,
-    };
-    const changed =
-      next.url !== prev.url ||
-      next.title !== prev.title ||
-      next.favIconUrl !== prev.favIconUrl ||
-      next.windowId !== prev.windowId;
-    if (!changed) return;
-    tabs.set(tabId, next);
-    broadcast('updated', next);
-  });
+export function onUpdated(tabId, changeInfo, tab) {
+  if (!tabs.has(tabId)) {
+    if (typeof tab?.id === 'number') onCreated(tab);
+    return;
+  }
+  const prev = tabs.get(tabId);
+  const next = {
+    ...prev,
+    url: changeInfo.url || tab?.url || prev.url,
+    title: changeInfo.title || tab?.title || prev.title,
+    favIconUrl: changeInfo.favIconUrl || tab?.favIconUrl || prev.favIconUrl,
+    windowId: tab?.windowId ?? prev.windowId,
+  };
+  if (next.url === prev.url && next.title === prev.title
+    && next.favIconUrl === prev.favIconUrl && next.windowId === prev.windowId) return;
+  tabs.set(tabId, next);
+  broadcast('updated', next);
+}
 
-  chrome.tabs.onRemoved.addListener((tabId) => {
-    const prev = tabs.get(tabId);
-    if (!prev) return;
-    tabs.delete(tabId);
-    broadcast('removed', prev);
-  });
+export function onRemoved(tabId) {
+  const prev = tabs.get(tabId);
+  if (!prev) return;
+  tabs.delete(tabId);
+  broadcast('removed', prev);
+}
 
-  // windowId 变化通过 onUpdated 捕获；onAttached 额外补一刀
-  chrome.tabs.onAttached?.addListener?.((tabId, attachInfo) => {
-    const prev = tabs.get(tabId);
-    if (!prev) return;
-    const next = { ...prev, windowId: attachInfo.newWindowId };
-    tabs.set(tabId, next);
-    broadcast('moved', next);
-  });
-
-  // onActivated 不改元数据，但 M5+ 要拿来切换活跃计时。M2 先不处理。
+export function onAttached(tabId, attachInfo) {
+  const prev = tabs.get(tabId);
+  if (!prev) return;
+  const next = { ...prev, windowId: attachInfo.newWindowId };
+  tabs.set(tabId, next);
+  broadcast('moved', next);
 }
 
 export function get(tabId) {

@@ -1,6 +1,6 @@
 # Privacy Policy — Tabpus
 
-**Last updated: 2026-04-22**
+**Last updated: 2026-08-01**
 
 Tabpus does not collect, transmit, or store any personal data on external servers.
 
@@ -15,12 +15,11 @@ Your data never leaves your machine.
 
 | Permission | Why |
 |-----------|-----|
-| `tabs` | Read open tab URLs to group them by domain |
-| `activeTab` | Detect which tab is currently focused for time tracking |
-| `storage` | Save time logs, settings, and bookmarked tabs locally |
-| `sessions` | Restore tab session data after browser restart |
-| `alarms` | Schedule periodic time checkpoints and timer expiration |
+| `tabs` | Read open tab URLs to group, activate, close, save, and restore strict-focus tabs |
+| `storage` | Save time logs, settings, saved pages, focus state, and preferences locally |
+| `alarms` | Schedule time checkpoints and timer expiration |
 | `idle` | Detect user inactivity to pause time tracking accurately |
+| `notifications` | Notify when a Focus Timer finishes or a daily time budget is reached |
 
 ## Contact
 

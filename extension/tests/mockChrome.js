@@ -55,9 +55,7 @@ export function resetMockStorage() {
   if (globalThis.__mockStorage) {
     globalThis.__mockStorage.local._reset();
     globalThis.__mockStorage.session._reset();
-  } else if (chrome?.storage?.local?.clear) {
-    // 真扩展环境：清空
-    chrome.storage.local.clear();
-    chrome.storage.session.clear();
+  } else {
+    throw new Error('Refusing to clear real extension storage; run API-mock tests with nodeRunner.mjs');
   }
 }

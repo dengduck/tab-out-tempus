@@ -69,6 +69,8 @@ async function request(type, payload = {}) {
 // ========== UI Port 生命周期 ==========
 
 const subscribers = new Map();
+const reconnectSubscribers = new Set();
+let connectedOnce = false;
 let uiPort = null;
 let reconnectEnabled = false;
 let reconnectTimer = null;
@@ -87,8 +89,17 @@ function connectUIPort() {
   if (uiPort) return;
   try {
     const port = chrome.runtime.connect({ name: 'tempus-ui' });
+    const isReconnect = connectedOnce;
+    connectedOnce = true;
     uiPort = port;
     port.onMessage.addListener(dispatchBroadcast);
+    if (isReconnect) {
+      queueMicrotask(() => {
+        for (const cb of reconnectSubscribers) {
+          try { cb(); } catch (err) { console.error(LOG_PREFIX, 'reconnect callback failed', err); }
+        }
+      });
+    }
     heartbeatTimer = setInterval(() => {
       try { port.postMessage({ type: 'UI_HEARTBEAT' }); } catch (_) { /* reconnect handles it */ }
     }, 20_000);
@@ -139,7 +150,6 @@ export function getState() {
 export function getTabs()            { return request(MSG.REQ_GET_TABS); }
 export function closeTab(tabId)      { return request(MSG.REQ_CLOSE_TAB, { tabId }); }
 export function getTodayWork()       { return request(MSG.REQ_GET_TODAY_WORK); }
-export function getTabTime(tabId)    { return request(MSG.REQ_GET_TAB_TIME, { tabId }); }
 export function getTabTimes(tabIds)  { return request(MSG.REQ_GET_TAB_TIMES, { tabIds }); }
 export function getHistoryRange(start, end) {
   return request(MSG.REQ_GET_HISTORY, { start, end });
@@ -159,6 +169,26 @@ export function blacklistAdd(hostname)    { return request(MSG.REQ_BLACKLIST_ADD
 export function blacklistRemove(hostname) { return request(MSG.REQ_BLACKLIST_REMOVE, { hostname }); }
 export function getIdleThreshold()        { return request(MSG.REQ_GET_IDLE_THRESHOLD); }
 export function setIdleThreshold(threshold) { return request(MSG.REQ_SET_IDLE_THRESHOLD, { threshold }); }
+export function getConfig() { return request(MSG.REQ_GET_CONFIG); }
+export function setTheme(theme) { return request(MSG.REQ_SET_THEME, { theme }); }
+export function setRetention(days) { return request(MSG.REQ_SET_RETENTION, { days }); }
+export function setFocusHosts(hosts) { return request(MSG.REQ_SET_FOCUS_HOSTS, { hosts }); }
+export function setGroupMode(mode) { return request(MSG.REQ_SET_GROUP_MODE, { mode }); }
+export function upsertCategory(category) { return request(MSG.REQ_UPSERT_CATEGORY, { category }); }
+export function removeCategory(categoryId) { return request(MSG.REQ_REMOVE_CATEGORY, { categoryId }); }
+export function setDomainCategory(hostname, categoryId) {
+  return request(MSG.REQ_SET_DOMAIN_CATEGORY, { hostname, categoryId });
+}
+export function setDomainBudget(hostname, budgetMs) {
+  return request(MSG.REQ_SET_DOMAIN_BUDGET, { hostname, budgetMs });
+}
+export function setDomainRule(hostname, categoryId, budgetMs) {
+  return request(MSG.REQ_SET_DOMAIN_RULE, { hostname, categoryId, budgetMs });
+}
+export function upsertCustomGroup(group) { return request(MSG.REQ_UPSERT_CUSTOM_GROUP, { group }); }
+export function removeCustomGroup(groupId) { return request(MSG.REQ_REMOVE_CUSTOM_GROUP, { groupId }); }
+export function exportHistory(format) { return request(MSG.REQ_EXPORT_HISTORY, { format }); }
+export function clearHistory() { return request(MSG.REQ_CLEAR_HISTORY); }
 
 // ========== 订阅式（M4+ 启用） ==========
 
@@ -183,3 +213,9 @@ function subscribe(msgType, cb) {
 export function subscribeTick(cb)        { return subscribe(MSG.BCAST_TICK, cb); }
 export function subscribeTabChange(cb)   { return subscribe(MSG.BCAST_TAB_CHANGE, cb); }
 export function subscribeStateChange(cb) { return subscribe(MSG.BCAST_STATE_CHANGE, cb); }
+export function subscribeConfigChange(cb) { return subscribe(MSG.BCAST_CONFIG_CHANGE, cb); }
+export function subscribeSavedChange(cb) { return subscribe(MSG.BCAST_SAVED_CHANGE, cb); }
+export function subscribeReconnect(cb) {
+  reconnectSubscribers.add(cb);
+  return () => reconnectSubscribers.delete(cb);
+}

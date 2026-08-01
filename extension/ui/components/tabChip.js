@@ -26,7 +26,7 @@ import { FAVICON_FALLBACK } from '../../shared/constants.js';
  * @param {{id:number,url:string,title:string,favIconUrl?:string,windowId:number}} tabInfo
  * @returns {HTMLElement}
  */
-export function create(tabInfo) {
+export function create(tabInfo, options = {}) {
   const favicon = h('img', {
     class: 'tabChip__favicon',
     src: tabInfo.favIconUrl || FAVICON_FALLBACK,
@@ -50,11 +50,13 @@ export function create(tabInfo) {
   const dupeBadge = h('span', { class: 'tabChip__dupe', hidden: '' });
 
   const saveBtn = h('button', {
-    class: 'tabChip__save',
+    class: `tabChip__save${options.isSaved ? ' is-saved' : ''}`,
     'data-action': 'save-for-later',
     'data-tab-id': String(tabInfo.id),
-    'aria-label': '稍后查看',
-    title: '稍后查看',
+    'aria-label': options.isSaved ? '已加入稍后查看' : '稍后查看',
+    'aria-pressed': String(!!options.isSaved),
+    title: options.isSaved ? '已加入稍后查看' : '稍后查看',
+    disabled: options.isSaved ? '' : null,
   }, ['🔖']);
 
   const closeBtn = h('button', {
@@ -102,6 +104,17 @@ export function updateBadge(el, ms, isActive = false) {
  * @param {HTMLElement} el tabChip 根元素
  * @param {number} dupeCount 该 URL 在全局出现次数（含自身）
  */
+export function updateSaved(el, isSaved) {
+  if (!el) return;
+  const button = el.querySelector('.tabChip__save');
+  if (!button) return;
+  button.classList.toggle('is-saved', !!isSaved);
+  button.disabled = !!isSaved;
+  button.setAttribute('aria-pressed', String(!!isSaved));
+  button.setAttribute('aria-label', isSaved ? '已加入稍后查看' : '稍后查看');
+  button.title = isSaved ? '已加入稍后查看' : '稍后查看';
+}
+
 export function updateDupeBadge(el, dupeCount) {
   if (!el) return;
   const badge = el.querySelector('.tabChip__dupe');
@@ -114,4 +127,3 @@ export function updateDupeBadge(el, dupeCount) {
   if (badge.hidden) badge.hidden = false;
   if (badge.textContent !== text) badge.textContent = text;
 }
-

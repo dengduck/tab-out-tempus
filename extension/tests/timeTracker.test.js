@@ -62,6 +62,14 @@ suite('TimeTracker — 基本累加', () => {
     assert.closeTo(ms, 1000, 10, 'tab 1 cumulative ≈ 1000ms');
   });
 
+  test('域名今日汇总保留已关闭 tab 的时间', async () => {
+    const { clock } = await freshTracker(0, [{ id: 8, url: 'https://closed.example.com/page' }]);
+    timeTracker.onActivateTab(8);
+    clock.advance(1500);
+    timeTracker.onRemoveTab(8);
+    assert.equal(timeTracker.getDomainTodayMs()['closed.example.com'], 1500);
+  });
+
   test('onRemoveTab：D17 不清 session 缓存，finalize 的 slice 进 timeLog', async () => {
     const { clock } = await freshTracker(0, [{ id: 1, url: 'https://github.com/foo' }]);
     timeTracker.onActivateTab(1);
@@ -210,6 +218,35 @@ suite('TimeTracker — Private Mode / blacklist 作为 pauseReason', () => {
   });
 });
 
+suite('TimeTracker — 持久化失败恢复', () => {
+  test('slice 写入失败后保留 pending，下一次 tick 重试成功', async () => {
+    const { clock } = await freshTracker(1000, [
+      { id: 1, url: 'https://a.com' }, { id: 2, url: 'https://b.com' },
+    ]);
+    timeTracker.onActivateTab(1);
+    clock.advance(1500);
+    const originalSet = chrome.storage.local.set;
+    let failed = false;
+    chrome.storage.local.set = async (obj) => {
+      if (!failed && Object.keys(obj).some((key) => key.startsWith('timeLog.'))) {
+        failed = true;
+        throw new Error('temporary write failure');
+      }
+      return originalSet.call(chrome.storage.local, obj);
+    };
+    timeTracker.onActivateTab(2);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    chrome.storage.local.set = originalSet;
+
+    await timeTracker.tick();
+    await timeLog.flush();
+    const slices = await timeLog.getRange(-1, 1e15);
+    const recovered = slices.find((slice) => slice.h === 'a.com');
+    assert.ok(recovered, 'failed slice retried');
+    assert.equal(recovered.e - recovered.s, 1500);
+  });
+});
+
 suite('TimeTracker — 周期 checkpoint', () => {
   test('长 slice 被结算并轮转，重启时只补偿 checkpoint 后缺口', async () => {
     const start = 1_000;
@@ -268,6 +305,25 @@ suite('TimeTracker — 跨午夜滚动', () => {
 });
 
 suite('TimeTracker — SW 重启恢复（D17 模型）', () => {
+  test('pending journal 恢复幂等，不重复累计已落盘 slice', async () => {
+    resetMockStorage();
+    timeLog.__resetForTests();
+    const now = new Date(2026, 0, 16, 12).getTime();
+    const slice = { s: now - 2000, e: now - 1000, h: 'a.com', tid: 6 };
+    slice.id = `${slice.s}:${slice.e}:${slice.tid}:${slice.h}`;
+    await timeLog.appendSlice(slice);
+    await chrome.storage.local.set({
+      [STORAGE_KEY.ACTIVE_SLICE_SNAPSHOT]: {
+        tabId: null, hostname: '', sliceStart: null, pending: [slice],
+      },
+    });
+    timeTracker.__testing.reset();
+    await timeTracker.init({ nowProvider: () => now, tabInfoProvider: () => null });
+    assert.equal(timeTracker.getTabCumulativeMs(6), 1000, 'duplicate pending slice not counted twice');
+    const all = await timeLog.getRange(now - 3000, now);
+    assert.equal(all.length, 1, 'ledger deduplicates by slice id');
+  });
+
   test('跨午夜 snapshot 只把零点后的交集计入今日缓存', async () => {
     resetMockStorage();
     timeLog.__resetForTests();

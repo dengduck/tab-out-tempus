@@ -70,9 +70,17 @@ await import('./timeTracker.test.js');
 
 // Import additional test files.
 await import('./formatDuration.test.js');
-await import('./sidebar.test.js');
+await import('./hostname.test.js');
 await import('./privateMode.test.js');
+await import('./configService.test.js');
+await import('./savedStore.test.js');
+await import('./historyService.test.js');
+await import('./store.test.js');
+await import('./focusTimer.test.js');
+await import('./focusGuard.test.js');
+await import('./groupingView.test.js');
 await import('./messaging.test.js');
+await import('./sidebar.test.js');
 
 const { pass, fail } = await run(null);
 console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);

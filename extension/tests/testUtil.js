@@ -46,8 +46,17 @@ export const assert = {
     }
   },
   deepEqual(actual, expected, msg) {
-    const a = JSON.stringify(actual);
-    const e = JSON.stringify(expected);
+    const normalize = (value) => {
+      if (value instanceof Set) return [...value].map(normalize).sort();
+      if (value instanceof Map) return [...value.entries()].map(([k, v]) => [normalize(k), normalize(v)]).sort();
+      if (Array.isArray(value)) return value.map(normalize);
+      if (value && typeof value === 'object') {
+        return Object.fromEntries(Object.keys(value).sort().map((key) => [key, normalize(value[key])]));
+      }
+      return value;
+    };
+    const a = JSON.stringify(normalize(actual));
+    const e = JSON.stringify(normalize(expected));
     if (a !== e) throw new Error(`${msg || 'deepEqual'}: expected ${e}, got ${a}`);
   },
 };

@@ -56,13 +56,14 @@ export const STORAGE_KEY = Object.freeze({
   SAVED: 'saved',
   PRIVATE_MODE: 'privateMode',
   FOCUS_TIMER: 'focusTimer',
+  FOCUS_GUARD_SESSION: 'focusGuardSession',
   BLACKLIST: 'blacklist',
   CONFIG: 'config',
   CONFIG_IDLE_THRESHOLD_SEC: 'config.idleThresholdSec',
   WELCOME_BANNER_DISMISSED: '__welcomeBannerDismissed',
   INSTALL_TIME: '__installTime',
-  // session-only
-  HOSTNAME_LAST_FOCUS: '__hostnameLastFocus',
+  BUDGET_NOTICES: '__budgetNotices',
+  RETENTION_LAST_APPLIED: '__retentionLastApplied',
 });
 
 // ========== 版本 ==========

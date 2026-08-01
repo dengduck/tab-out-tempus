@@ -13,7 +13,6 @@
 
 import { MSG, classify } from '../shared/messages.js';
 import { LOG_PREFIX, TICK_INTERVAL_MS, STORAGE_KEY } from '../shared/constants.js';
-import { getHostname } from '../shared/hostname.js';
 import * as tabRegistry from './tabRegistry.js';
 import * as timeTracker from './timeTracker.js';
 import * as focusModel from './focusModel.js';
@@ -21,7 +20,7 @@ import * as idleGuard from './idleGuard.js';
 import * as alarms from './alarms.js';
 import * as privateMode from './privateMode.js';
 import * as blacklist from './blacklist.js';
-import * as focusTimer from './focusTimer.js';
+import * as featureHub from './featureHub.js';
 import { getRange } from './timeLog.js';
 import { localGet, localSet } from './store.js';
 
@@ -54,6 +53,7 @@ function startTickBroadcast() {
       activeTabId: state.activeTabId,
       isActive: state.isActive,
       tabTimes,
+      domainTimes: timeTracker.getDomainTodayMs(),
     });
   }, TICK_INTERVAL_MS);
 }
@@ -70,11 +70,17 @@ function stopTickBroadcast() {
 let bootstrapped = false;
 let bootstrapPromise = null;
 
+// 同步注册 wake listener；真正处理前等待 bootstrap 恢复持久状态。
+chrome.alarms.onAlarm.addListener((alarm) => {
+  void bootstrap()
+    .then(() => alarms.handleAlarm(alarm))
+    .catch((err) => console.error(LOG_PREFIX, 'alarm bootstrap/handler failed', err));
+});
+
 async function bootstrap() {
   if (bootstrapPromise) return bootstrapPromise;
   bootstrapPromise = (async () => {
     if (bootstrapped) return;
-    bootstrapped = true;
     console.log(LOG_PREFIX, 'SW bootstrap', chrome.runtime.getManifest().version);
 
     // 1. tabRegistry（需要先有它，timeTracker 靠它查 hostname）
@@ -83,11 +89,7 @@ async function bootstrap() {
     // 2. timeTracker（尚未注册 chrome 事件，只做内部状态恢复）
     await timeTracker.init({ emit: broadcast });
 
-    // 3. tab 事件路由到 timeTracker（tabRegistry 自己的 listener 负责 UI 广播，这里是另一套）
-    //    用独立 listener 避免给 tabRegistry 增加计时职责。
-    registerTabEventsForTracker();
-
-    // 4. focusModel（会调 timeTracker.onFocusWindow + onActivateTab 补齐初始焦点）
+    // 3. focusModel（补齐初始窗口与 active tab；wake listeners 已在模块求值时注册）
     await focusModel.init();
 
     // 5. idleGuard (D20: async — reads user config for idle threshold)
@@ -96,41 +98,67 @@ async function bootstrap() {
     // 6. M8 模块（依赖 timeTracker 已 init）
     await privateMode.init({ emit: broadcast });
     await blacklist.init({ emit: broadcast });
-    await focusTimer.init({ emit: broadcast });
+    await featureHub.init({ emit: broadcast });
 
     // 7. alarms（最后启动 tick）
-    alarms.init();
-  })();
+    await alarms.init();
+    bootstrapped = true;
+  })().catch((err) => {
+    bootstrapped = false;
+    bootstrapPromise = null;
+    throw err;
+  });
   return bootstrapPromise;
 }
 
-function registerTabEventsForTracker() {
-  chrome.tabs.onActivated.addListener((activeInfo) => {
-    timeTracker.onActivateTab(activeInfo.tabId, activeInfo.windowId);
-    // M8: 切 tab 后检查黑名单
-    blacklist.checkTab(activeInfo.tabId);
-  });
-
-  chrome.tabs.onRemoved.addListener((tabId) => {
-    timeTracker.onRemoveTab(tabId);
-  });
-
-  chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-    if (changeInfo.url) {
-      timeTracker.onUpdateUrl(tabId, '', changeInfo.url);
-      // M8+M10(P0-08): URL 变了重新检查黑名单，但只对 active tab
-      // 非 active tab 的 URL 变化不影响计时状态（下次 activate 会重新检查）
-      const state = timeTracker.getTrackingState();
-      if (state.activeTabId === tabId) {
-        blacklist.checkTab(tabId);
-      }
-    }
-    // D17 Bug 2: audible 状态变化时，让 idleGuard 重新评估
-    if ('audible' in changeInfo) {
-      idleGuard.reevaluateAudible();
-    }
+function routeWake(label, handler) {
+  void bootstrap().then(handler).catch((err) => {
+    console.error(LOG_PREFIX, `${label} wake handler failed`, err);
   });
 }
+
+function registerWakeListeners() {
+  chrome.tabs.onCreated.addListener((tab) => {
+    routeWake('tab-created', () => tabRegistry.onCreated(tab));
+  });
+  chrome.tabs.onActivated.addListener((info) => {
+    routeWake('tab-activated', async () => {
+      timeTracker.onActivateTab(info.tabId, info.windowId);
+      blacklist.checkTab(info.tabId);
+      await featureHub.onTabActivated(info);
+    });
+  });
+  chrome.tabs.onRemoved.addListener((tabId) => {
+    routeWake('tab-removed', async () => {
+      tabRegistry.onRemoved(tabId);
+      timeTracker.onRemoveTab(tabId);
+      await featureHub.onTabRemoved(tabId);
+    });
+  });
+  chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    routeWake('tab-updated', async () => {
+      const previousUrl = tabRegistry.get(tabId)?.url || '';
+      tabRegistry.onUpdated(tabId, changeInfo, tab);
+      if (changeInfo.url) {
+        timeTracker.onUpdateUrl(tabId, previousUrl, changeInfo.url);
+        if (timeTracker.getTrackingState().activeTabId === tabId) blacklist.checkTab(tabId);
+      }
+      if ('audible' in changeInfo) await idleGuard.reevaluateAudible();
+      await featureHub.onTabUpdated(tabId, changeInfo, tab);
+    });
+  });
+  chrome.tabs.onAttached?.addListener?.((tabId, info) => {
+    routeWake('tab-attached', () => tabRegistry.onAttached(tabId, info));
+  });
+  chrome.windows.onFocusChanged.addListener((windowId) => {
+    routeWake('window-focus', () => focusModel.onFocusChanged(windowId));
+  });
+  chrome.idle.onStateChanged.addListener((state) => {
+    routeWake('idle-state', () => idleGuard.onStateChanged(state));
+  });
+}
+
+registerWakeListeners();
 
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name !== 'tempus-ui') return;
@@ -178,6 +206,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 async function handleRequest(message, _sender) {
   // 确保 bootstrap 完成（某些 REQ 在 SW 冷启动的瞬间可能先于 bootstrap 触发）
   await bootstrap();
+  const featureResult = await featureHub.handleRequest(message, tabRegistry);
+  if (featureResult !== null) return featureResult;
 
   switch (message.type) {
     // 兼容旧 UI；新版本使用 runtime Port 自动管理连接生命周期。
@@ -185,13 +215,16 @@ async function handleRequest(message, _sender) {
     case MSG.REQ_UI_GONE:
       return { ok: true };
 
-    case MSG.REQ_GET_STATE:
+    case MSG.REQ_GET_STATE: {
+      const extras = featureHub.getState();
       return {
         tracking: timeTracker.getTrackingState(),
         privateMode: privateMode.getStatus(),
-        focusTimer: focusTimer.getStatus(),
+        focusTimer: extras.focusTimer,
         blacklist: blacklist.getList(),
+        config: extras.config,
       };
+    }
 
     case MSG.REQ_GET_TABS:
       return { tabs: tabRegistry.getAll() };
@@ -201,14 +234,6 @@ async function handleRequest(message, _sender) {
       if (typeof tabId !== 'number') throw new Error('invalid tabId');
       await chrome.tabs.remove(tabId);
       return { closed: tabId };
-    }
-
-    case MSG.REQ_GET_TAB_TIME: {
-      const tabId = message.tabId;
-      if (typeof tabId !== 'number') throw new Error('invalid tabId');
-      const cumulativeMs = timeTracker.getTabCumulativeMs(tabId);
-      const state = timeTracker.getTrackingState();
-      return { cumulativeMs, isActive: state.activeTabId === tabId };
     }
 
     case MSG.REQ_GET_TAB_TIMES: {
@@ -227,7 +252,7 @@ async function handleRequest(message, _sender) {
           result[t.id] = timeTracker.getTabCumulativeMs(t.id);
         }
       }
-      return { tabTimes: result, activeTabId: state.activeTabId };
+      return { tabTimes: result, domainTimes: timeTracker.getDomainTodayMs(), activeTabId: state.activeTabId };
     }
 
     case MSG.REQ_GET_TODAY_WORK: {
@@ -243,40 +268,6 @@ async function handleRequest(message, _sender) {
       return { slices };
     }
 
-    // ===== M7: Save for Later =====
-
-    case MSG.REQ_SAVE_FOR_LATER: {
-      const tabId = message.tabId;
-      if (typeof tabId !== 'number') throw new Error('invalid tabId');
-      const tab = tabRegistry.get(tabId);
-      if (!tab) throw new Error('tab not found');
-      const entry = {
-        id: `${Date.now()}-${tabId}`,
-        url: tab.url,
-        title: tab.title || tab.url || '',
-        favIconUrl: tab.favIconUrl || '',
-        savedAt: Date.now(),
-      };
-      const saved = (await localGet(STORAGE_KEY.SAVED)) || [];
-      saved.push(entry);
-      await localSet(STORAGE_KEY.SAVED, saved);
-      return { entry };
-    }
-
-    case MSG.REQ_GET_SAVED: {
-      const saved = (await localGet(STORAGE_KEY.SAVED)) || [];
-      return { saved };
-    }
-
-    case MSG.REQ_REMOVE_SAVED: {
-      const entryId = message.id;
-      if (!entryId) throw new Error('invalid id');
-      const saved = (await localGet(STORAGE_KEY.SAVED)) || [];
-      const filtered = saved.filter((e) => e.id !== entryId);
-      await localSet(STORAGE_KEY.SAVED, filtered);
-      return { removed: entryId };
-    }
-
     // ===== M8: Private Mode =====
 
     case MSG.REQ_START_PRIVATE_MODE: {
@@ -290,36 +281,20 @@ async function handleRequest(message, _sender) {
       return { stopped: true };
     }
 
-    // ===== M8: Focus Timer =====
-
-    case MSG.REQ_START_FOCUS_TIMER: {
-      const durationMin = message.durationMin;
-      if (typeof durationMin !== 'number' || durationMin <= 0) throw new Error('invalid durationMin');
-      const opts = {};
-      if (typeof message.strict === 'boolean') opts.strict = message.strict;
-      if (Array.isArray(message.allowedHosts)) opts.allowedHosts = message.allowedHosts;
-      return await focusTimer.start(durationMin, opts);
-    }
-
-    case MSG.REQ_STOP_FOCUS_TIMER: {
-      await focusTimer.stop();
-      return { stopped: true };
-    }
-
     // ===== M8: Blacklist =====
 
     case MSG.REQ_BLACKLIST_ADD: {
       const hostname = message.hostname;
       if (typeof hostname !== 'string' || !hostname) throw new Error('invalid hostname');
-      await blacklist.add(hostname);
-      return { added: hostname, list: blacklist.getList() };
+      const added = await blacklist.add(hostname);
+      return { added, list: blacklist.getList() };
     }
 
     case MSG.REQ_BLACKLIST_REMOVE: {
       const hostname = message.hostname;
       if (typeof hostname !== 'string' || !hostname) throw new Error('invalid hostname');
-      await blacklist.remove(hostname);
-      return { removed: hostname, list: blacklist.getList() };
+      const removed = await blacklist.remove(hostname);
+      return { removed, list: blacklist.getList() };
     }
 
     // ===== M9: Idle Threshold =====
@@ -339,6 +314,3 @@ async function handleRequest(message, _sender) {
       throw new Error(`not_implemented: ${message.type}`);
   }
 }
-
-// 辅助：过滤用（UI 端若需要 hostname 也走 shared）
-export { getHostname };

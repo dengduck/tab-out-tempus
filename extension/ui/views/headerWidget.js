@@ -24,7 +24,9 @@ import { LOG_PREFIX } from '../../shared/constants.js';
  * @property {string}   text         按钮文字标签
  * @property {number[]} presets      dropdown 时长预设（分钟）
  * @property {(min:number)=>string} [presetLabel]  预设项文案（默认 `${min} 分钟`）
- * @property {(min:number)=>Promise<any>} onStart  选时长后调用
+ * @property {(min:number,opts?:object)=>Promise<any>} onStart  选时长后调用
+ * @property {()=>HTMLElement} [createDropdownExtra]
+ * @property {()=>object} [getStartOptions]
  * @property {()=>Promise<any>} onStop  激活态点击调用
  * @property {string}   titleIdle    未激活时按钮 title
  * @property {string}   titleActive  激活时按钮 title
@@ -124,6 +126,8 @@ export function createHeaderWidget(config) {
 
       dropdownEl = h('div', { className: 'headerWidget__dropdown' });
       dropdownEl.hidden = true;
+      const extra = config.createDropdownExtra?.();
+      if (extra) dropdownEl.appendChild(extra);
       config.presets.forEach((min) => {
         const item = h('button', {
           className: 'headerWidget__dropdownItem',
@@ -134,7 +138,7 @@ export function createHeaderWidget(config) {
           closeDropdown();
           btnEl.disabled = true;
           try {
-            await config.onStart(min);
+            await config.onStart(min, config.getStartOptions?.() || {});
           } catch (err) {
             console.error(LOG_PREFIX, config.logName, 'start failed', err);
           } finally {

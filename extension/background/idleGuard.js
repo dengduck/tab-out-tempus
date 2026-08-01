@@ -50,6 +50,23 @@ async function isActiveTabAudible() {
   }
 }
 
+export async function onStateChanged(state) {
+  currentState = state;
+  if (state === 'active') {
+    timeTracker.resume('idle');
+  } else if (state === 'locked') {
+    timeTracker.pause('idle');
+  } else {
+    const audible = await isActiveTabAudible();
+    if (audible) {
+      console.log(LOG_PREFIX, 'idle detected but active tab is audible — skipping pause');
+      return;
+    }
+    timeTracker.pause('idle');
+  }
+  broadcastStateChange();
+}
+
 export async function init(deps = {}) {
   if (initialized) return;
   initialized = true;
@@ -71,28 +88,6 @@ export async function init(deps = {}) {
   } catch (err) {
     console.warn(LOG_PREFIX, 'idle.setDetectionInterval failed', err);
   }
-
-  chrome.idle.onStateChanged.addListener(async (state) => {
-    currentState = state;
-    if (state === 'active') {
-      timeTracker.resume('idle');
-      broadcastStateChange();
-    } else if (state === 'locked') {
-      // 锁屏 = 一定暂停，不做 audible 豁免
-      timeTracker.pause('idle');
-      broadcastStateChange();
-    } else {
-      // state === 'idle'：键鼠空闲，但要检查是否在看视频
-      const audible = await isActiveTabAudible();
-      if (audible) {
-        // D17 Bug 2 fix: 正在播放声音 → 跳过 idle 暂停
-        console.log(LOG_PREFIX, 'idle detected but active tab is audible — skipping pause');
-        return;
-      }
-      timeTracker.pause('idle');
-      broadcastStateChange();
-    }
-  });
 
   // 启动时查一次当前状态，避免"SW 冷启动时用户其实 idle 着但 timeTracker 不知道"
   // P1-06: effectiveThreshold===0 时跳过（idle 已关闭）
@@ -151,19 +146,17 @@ export async function updateThreshold(sec) {
   if (typeof sec !== 'number') return;
 
   if (sec === 0) {
-    // "关闭" idle 检测：先恢复可能存在的 idle pause，然后把阈值设到最大
+    await localSet(STORAGE_KEY.CONFIG_IDLE_THRESHOLD_SEC, 0);
+    effectiveThreshold = 0;
     timeTracker.resume('idle');
     broadcastStateChange();
-    effectiveThreshold = 0;
-    await localSet(STORAGE_KEY.CONFIG_IDLE_THRESHOLD_SEC, 0);
-    // Chrome API 不支持真正关闭 idle，设一个超长阈值（24 小时）近似关闭
     try { chrome.idle.setDetectionInterval(86400); } catch (_) {}
     return;
   }
 
   const clamped = Math.max(15, sec);
-  effectiveThreshold = clamped;
   await localSet(STORAGE_KEY.CONFIG_IDLE_THRESHOLD_SEC, clamped);
+  effectiveThreshold = clamped;
   try {
     chrome.idle.setDetectionInterval(clamped);
   } catch (err) {

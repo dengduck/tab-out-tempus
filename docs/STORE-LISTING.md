@@ -1,4 +1,4 @@
-# Chrome Web Store Listing — Tabpus v2.0.0
+# Chrome Web Store Listing — Tabpus v2.0.2
 
 > 填写 [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/devconsole) 时复制粘贴即可。
 
@@ -17,6 +17,7 @@ Tabpus replaces your new tab page with a clean dashboard of everything you have 
 
 🗂️ TABS AT A GLANCE
 • Tabs grouped by domain on a visual grid
+• Switch between domain, category, and custom-group views
 • Homepages group (Gmail, X, YouTube, LinkedIn, GitHub) in one card
 • Click any tab to jump to it — across windows
 • Duplicate detection with one-click cleanup
@@ -25,25 +26,30 @@ Tabpus replaces your new tab page with a clean dashboard of everything you have 
 ⏱️ TIME TRACKING
 • Per-domain session time with live-updating badges
 • History stats: Today / Week / Month / Year views
+• JSON/CSV export and automatic retention (30/90/180/365 days)
+• Daily domain budgets with warning states and one-time alerts
 • 24-hour activity heatmap
 • Single time ledger — no duplicate counting, no numbers jumping backward
 
 🎯 FOCUS & PRIVACY
-• Focus Timer: Pomodoro-style (5/15/25/45/60 min) with header countdown
-• Private Mode: pause all tracking temporarily (15min to 8h)
-• Blacklist: permanently exclude specific domains from stats
+• Focus Timer: countdown with completion notification
+• Strict Focus: allow only configured exact or wildcard domains, with a local blocked page
+• Private Mode: pause all tracking temporarily and resume automatically
+• Excluded domains: accept full URLs or hostnames and normalize them
 • Idle detection: configurable threshold (30s to 10min, or Off)
 • Audible exemption: watching videos won't trigger false "idle" pauses
 
 📌 SAVE FOR LATER
-• Bookmark tabs to a sidebar checklist before closing
+• Keep bookmarked pages until you explicitly remove them
+• URL deduplication, saved-state indicators, search, and sorting
 • Persisted across browser restarts
 
 ✨ CLOSE WITH STYLE
 • Satisfying swoosh sound + confetti burst animation
 • Pure Web Audio API — no audio files loaded
 
-🔒 100% LOCAL & PRIVATE
+🎨 APPEARANCE & PRIVACY
+• Light, dark, or system-following theme
 • No server, no account, no external API calls
 • All data stays in chrome.storage.local on your machine
 • Zero dependencies, zero build tools
@@ -51,9 +57,9 @@ Tabpus replaces your new tab page with a clean dashboard of everything you have 
 
 ⚙️ TECHNICAL
 • Chrome Manifest V3, pure ES Modules
-• Modular service worker architecture (10 independent modules)
-• Survives SW restarts via chrome.alarms checkpoints
-• No setInterval — all periodic tasks use chrome.alarms
+• Modular service worker with persisted recovery journals
+• Survives SW restarts via alarms, snapshots, and runtime Port reconnects
+• Minimal permissions: tabs, storage, alarms, idle, notifications
 ```
 
 ---
@@ -83,7 +89,7 @@ Chrome Web Store 要求提供隐私政策 URL。由于 Tabpus 不收集任何数
 ```markdown
 # Privacy Policy — Tabpus
 
-**Last updated: 2026-04-22**
+**Last updated: 2026-08-01**
 
 Tabpus does not collect, transmit, or store any personal data on external servers.
 
@@ -98,12 +104,11 @@ Your data never leaves your machine.
 
 | Permission | Why |
 |-----------|-----|
-| `tabs` | Read open tab URLs to group them by domain |
-| `activeTab` | Detect which tab is currently focused for time tracking |
-| `storage` | Save time logs, settings, and bookmarked tabs locally |
-| `sessions` | Restore tab session data after browser restart |
-| `alarms` | Schedule periodic time checkpoints and timer expiration |
+| `tabs` | Read open tab URLs to group, activate, close, save, and restore strict-focus tabs |
+| `storage` | Save time logs, settings, saved pages, focus state, and preferences locally |
+| `alarms` | Schedule time checkpoints and timer expiration |
 | `idle` | Detect user inactivity to pause time tracking accurately |
+| `notifications` | Notify when a Focus Timer finishes or a daily time budget is reached |
 
 ## Contact
 

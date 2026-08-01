@@ -288,18 +288,18 @@ export function subscribeStateChange(cb);          // pauseReasons / privateMode
   finalizeActiveSlice()           # 把 [oldStart, now] 写入 timeLog + tabCumulativeMs[oldActive] += Δ
   activeTabId = X
   activeSliceStart = now
-  
+
 用户切出到其它 app:
   focusedWindowId = null (WINDOW_ID_NONE)
   finalizeActiveSlice()           # 暂停，不开新 slice
   activeTabId = null
-  
+
 alarms 每 30s:
   if (activeTabId) {
     // 不 finalize，但写一份快照到 storage.local，用于 SW 重启恢复
     persistRunningSnapshot({tabId, sliceStart, now});
   }
-  
+
 SW 冷启动:
   loadSnapshot() → 如果有活 slice，finalize 到 now（丢失的时间最多 30s）
   initFocusedWindow() → 查当前焦点，如果有就开新 slice
@@ -307,8 +307,8 @@ SW 冷启动:
 
 ### 4.3 `tabCumulativeMs` 的单调性保证
 
-**禁止：** 任何地方做 `tabCumulativeMs[id] = X` 的赋值（除 init）。  
-**唯一合法操作：** `tabCumulativeMs[id] += delta`（delta ≥ 0）。  
+**禁止：** 任何地方做 `tabCumulativeMs[id] = X` 的赋值（除 init）。
+**唯一合法操作：** `tabCumulativeMs[id] += delta`（delta ≥ 0）。
 **测试用例：** `timeTracker.test.js` 要覆盖：
 - 普通 active → inactive 转换，cumulative 正确累加
 - 快速来回切 tab，不丢不重
@@ -569,7 +569,35 @@ historyView.onOpen(async (range) => {
 
 ---
 
-## 12. 下一步
+## 12. v2.0.2 扩展模块（2026-07-31）
 
-M0 完成的判定标准：**本文档被邓老师读过并认可，每个模块的接口签名都在上面**。  
-然后才能进入 M1（动键盘写代码）。
+### 后台服务
+- `configService.js`：串行读写统一 `config`，负责主题、保留期、白名单、分类、预算和自定义分组校验。
+- `savedStore.js`：稍后查看唯一读写入口，按规范 URL 去重并保证写失败不改内存。
+- `historyService.js`：导出、保留期与清理事务；清理期间用 `history-clear` pauseReason 暂停账本。
+- `featureHub.js`：上述服务的请求路由、配置广播、Focus 通知和每日预算通知。
+- `focusGuard.js`：strict timer 的标签守卫、blocked token 和恢复流程。
+
+### 配置 Schema
+```js
+config = {
+  theme: 'system' | 'light' | 'dark',
+  historyRetentionDays: null | number,
+  focusAllowedHosts: string[],
+  groupMode: 'domain' | 'category' | 'custom',
+  categories: Array<{id,name,emoji,color,builtin}>,
+  domainCategories: {[hostname]: categoryId},
+  domainBudgets: {[hostname]: milliseconds},
+  customGroups: Array<{id,name,hosts:string[]}>
+}
+```
+
+### UI
+- `settingsAdvanced.js` 管理新增设置；`theme.js` 应用主题。
+- `tabsGridGrouping.js` 负责分类/自定义分组 DOM，`tabsGridDuplicates.js` 独立处理重复标签。
+- `blocked.html` 是 strict 模式唯一阻断界面，不注入网页、不增加 host permissions。
+- `BCAST_CONFIG_CHANGE` 只携带完整 config；UI 收到后应用主题并按新分组配置重绘一次。
+
+### 测试
+- Node runner 承担会替换 Chrome API 的全部 mock 测试。
+- 扩展内浏览器 runner 仅加载不会触碰真实 storage/tabs 的纯逻辑测试，并使用外部脚本满足 MV3 CSP。

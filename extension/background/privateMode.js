@@ -41,10 +41,13 @@ function broadcastChange() {
   }
 }
 
-function clearRuntimeState() {
+function resumeRuntime() {
   endTime = null;
-  try { chrome.alarms.clear(ALARM_NAME); } catch (_) { /* ignore */ }
   timeTracker.resume(PAUSE_REASON);
+}
+
+async function clearAlarm() {
+  if (chrome.alarms?.clear) await chrome.alarms.clear(ALARM_NAME);
 }
 
 // ========== 公共 API ==========
@@ -54,11 +57,15 @@ export async function start(durationMin) {
     throw new Error('invalid durationMin');
   }
 
-  endTime = Date.now() + durationMin * 60 * 1000;
-  await localSet(STORAGE_KEY.PRIVATE_MODE, { endTime });
-
-  // 注册到期 alarm
-  chrome.alarms.create(ALARM_NAME, { when: endTime });
+  const nextEndTime = Date.now() + durationMin * 60 * 1000;
+  await localSet(STORAGE_KEY.PRIVATE_MODE, { endTime: nextEndTime });
+  endTime = nextEndTime;
+  try { await chrome.alarms.create(ALARM_NAME, { when: endTime }); }
+  catch (err) {
+    await localRemove(STORAGE_KEY.PRIVATE_MODE);
+    endTime = null;
+    throw err;
+  }
 
   timeTracker.pause(PAUSE_REASON);
   log('started, endTime =', new Date(endTime).toISOString());
@@ -69,8 +76,9 @@ export async function start(durationMin) {
 export async function stop() {
   if (endTime === null && !timeTracker.isPausedBy(PAUSE_REASON)) return;
 
-  clearRuntimeState();
   await localRemove(STORAGE_KEY.PRIVATE_MODE);
+  await clearAlarm();
+  resumeRuntime();
   log('stopped');
   broadcastChange();
 }
@@ -80,7 +88,8 @@ export function getStatus() {
   const remaining = endTime - Date.now();
   if (remaining <= 0) {
     // alarm 延迟时主动过期；必须同步解除 pauseReason，避免永久停表。
-    clearRuntimeState();
+    resumeRuntime();
+    void clearAlarm().catch(() => {});
     localRemove(STORAGE_KEY.PRIVATE_MODE).catch(() => {});
     return null;
   }
@@ -111,7 +120,7 @@ export async function init(deps = {}) {
 
   // 恢复
   endTime = stored.endTime;
-  chrome.alarms.create(ALARM_NAME, { when: endTime });
+  await chrome.alarms.create(ALARM_NAME, { when: endTime });
   timeTracker.pause(PAUSE_REASON);
   log('init: restored, remaining =', Math.round(remaining / 1000), 's');
 }

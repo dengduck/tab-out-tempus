@@ -84,6 +84,7 @@ async function loadRange(period) {
 
   panelEl.innerHTML = '';
   panelEl.appendChild(renderTabs(period));
+  panelEl.appendChild(renderActions());
   panelEl.appendChild(h('p', { class: 'historyPanel__loading' }, ['加载中…']));
 
   try {
@@ -95,6 +96,47 @@ async function loadRange(period) {
     panelEl.querySelector('.historyPanel__loading')?.remove();
     panelEl.appendChild(h('p', { class: 'historyPanel__error' }, [`加载失败: ${err?.message || err}`]));
   }
+}
+
+function downloadText({ text, mime, filename }) {
+  const url = URL.createObjectURL(new Blob([text], { type: mime }));
+  const link = h('a', { href: url, download: filename });
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+function renderActions() {
+  const wrapper = h('div', { class: 'historyPanel__actionWrap' });
+  const actions = h('div', { class: 'historyPanel__actions' });
+  const status = h('p', { class: 'historyPanel__actionStatus', role: 'status' });
+  for (const format of ['json', 'csv']) {
+    const btn = h('button', { class: 'historyPanel__action' }, [`导出 ${format.toUpperCase()}`]);
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      status.textContent = '';
+      try { downloadText(await messaging.exportHistory(format)); }
+      catch (err) { status.textContent = `导出失败：${err?.message || err}`; }
+      finally { btn.disabled = false; }
+    });
+    actions.appendChild(btn);
+  }
+  const clear = h('button', { class: 'historyPanel__action is-danger' }, ['清空历史']);
+  clear.addEventListener('click', async () => {
+    if (!confirm('确定清空全部历史时间记录？此操作不可恢复。')) return;
+    clear.disabled = true;
+    status.textContent = '';
+    try {
+      await messaging.clearHistory();
+      await loadRange(currentPeriod);
+    } catch (err) {
+      status.textContent = `清空失败：${err?.message || err}`;
+    } finally { clear.disabled = false; }
+  });
+  actions.appendChild(clear);
+  wrapper.append(actions, status);
+  return wrapper;
 }
 
 function renderTabs(activePeriod) {

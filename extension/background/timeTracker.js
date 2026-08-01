@@ -6,17 +6,18 @@
 
 import { STORAGE_KEY, LOG_PREFIX, ALARM_PERIOD_S } from '../shared/constants.js';
 import { getHostname } from '../shared/hostname.js';
-import { localGet, localSet, localRemove } from './store.js';
-import { appendSlice, getRange } from './timeLog.js';
+import { localRemove } from './store.js';
+import { appendSlice, getRange, flush as flushTimeLog } from './timeLog.js';
+import * as persistence from './timeTrackerPersistence.js';
 import * as tabRegistry from './tabRegistry.js';
 
 /** @typedef {import('../shared/types.js').PauseReason} PauseReason */
 /** @typedef {import('../shared/types.js').TrackingState} TrackingState */
 
 // ========== 内部状态 ==========
-
-/** 今日 timeLog 内存缓存：tabId → 已 finalize 毫秒总和。SW 重启时从 timeLog 重建。 @type {Map<number, number>} */
+/** 今日 timeLog 缓存：tabId → 已结算毫秒。 @type {Map<number, number>} */
 const tabSessionMs = new Map();
+const domainSessionMs = new Map();
 /** @type {number | null} */
 let activeTabId = null;
 /** @type {number | null} */
@@ -32,13 +33,8 @@ let tabInfoProvider = (tabId) => tabRegistry.get?.(tabId) || null;
 let initialized = false;
 
 // ========== 小工具 ==========
-
 function now() { return nowProvider(); }
-
-function log(...args) {
-  console.log(LOG_PREFIX, '[tt]', ...args);
-}
-
+function log(...args) { console.log(LOG_PREFIX, '[tt]', ...args); }
 /** 从 tabRegistry 取 hostname；未知 tab 返回空串。 */
 function hostnameOf(tabId) {
   const info = tabInfoProvider(tabId);
@@ -61,31 +57,26 @@ function localDayRange(ts) {
 }
 
 // ========== 核心原子操作 ==========
-
-/** 结算活跃 slice 到 timeLog 和今日缓存；无活跃 slice 时 no-op。 */
+/** 结算活跃 slice 到 timeLog 和今日缓存。 */
 function finalizeActiveSlice(endTs = now()) {
   if (activeTabId === null || activeSliceStart === null) return;
   const startTs = activeSliceStart;
   const delta = endTs - startTs;
 
-  // 关掉状态（无论 delta 是否合法，都要关）
   const finishedTabId = activeTabId;
   const finishedHostname = activeHostname;
-  activeSliceStart = null;
-  // 注意：这里不清 activeTabId。activeTabId 表示"焦点 tab 是谁"，
-  // 它由 onActivateTab / onFocusWindow 显式改；finalize 只关 slice。
+  activeSliceStart = null; // activeTabId 仍表示焦点 tab
+  if (delta <= 0) return;
 
-  if (delta <= 0) return;  // 时钟回拨或同毫秒事件
-
-  // 更新内存缓存（铁律 #2：只 +=）
+  // 缓存只允许 +=
   const prev = tabSessionMs.get(finishedTabId) || 0;
   tabSessionMs.set(finishedTabId, prev + delta);
-
-  // 落盘 slice（普通事件入口不 await；周期 checkpoint 会等待写入完成）
   if (finishedHostname) {
-    return appendSlice({ s: startTs, e: endTs, h: finishedHostname, tid: finishedTabId });
+    domainSessionMs.set(finishedHostname, (domainSessionMs.get(finishedHostname) || 0) + delta);
   }
-  return null;
+
+  if (!finishedHostname) return null;
+  return persistence.queueSlice({ s: startTs, e: endTs, h: finishedHostname, tid: finishedTabId });
 }
 
 /** canRun() 时开启新 slice；调用方负责先结算旧 slice。 */
@@ -103,8 +94,18 @@ function rolloverDayIfNeeded() {
   const wasRunning = activeSliceStart !== null;
   if (wasRunning) finalizeActiveSlice(dayStart);
   tabSessionMs.clear();
+  domainSessionMs.clear();
   currentDayStart = dayStart;
   if (wasRunning && canRun()) startSlice(dayStart);
+}
+
+function activeSnapshot() {
+  return { tabId: activeTabId, hostname: activeHostname, sliceStart: activeSliceStart };
+}
+
+function persistSoon() {
+  void persistence.persist(activeSnapshot())
+    .catch((err) => console.error(LOG_PREFIX, 'snapshot persist failed', err));
 }
 
 function broadcastStateChange() {
@@ -125,10 +126,8 @@ export function pause(reason) {
   rolloverDayIfNeeded();
   const wasPaused = pauseReasons.size > 0;
   pauseReasons.add(reason);
-  // 第一次进入暂停：finalize
-  if (!wasPaused) {
-    finalizeActiveSlice();
-  }
+  if (!wasPaused) finalizeActiveSlice();
+  persistSoon();
   broadcastStateChange();
 }
 
@@ -138,26 +137,16 @@ export function resume(reason) {
   rolloverDayIfNeeded();
   if (!pauseReasons.has(reason)) return;
   pauseReasons.delete(reason);
-  // 最后一个 reason 解除 & 有焦点 tab → 开新 slice
-  if (pauseReasons.size === 0 && activeTabId !== null && activeSliceStart === null) {
-    startSlice();
-  }
+  if (pauseReasons.size === 0 && activeTabId !== null && activeSliceStart === null) startSlice();
+  persistSoon();
   broadcastStateChange();
 }
 
-export function isPausedBy(reason) {
-  return pauseReasons.has(reason);
-}
-
-export function getPauseReasons() {
-  return Array.from(pauseReasons);
-}
+export function isPausedBy(reason) { return pauseReasons.has(reason); }
+export function getPauseReasons() { return Array.from(pauseReasons); }
 
 // ========== 事件入口（sw.js 路由） ==========
-/**
- * 窗口焦点变化。windowId === null / WINDOW_ID_NONE 表示 Chrome 失焦。
- * 这里只管 'window-blur' reason；具体 active tab 由 onActivateTab 驱动。
- */
+/** 窗口焦点变化；active tab 由 onActivateTab 驱动。 */
 export function onFocusWindow(windowId) {
   if (windowId === null || windowId === undefined || windowId === chrome.windows.WINDOW_ID_NONE) {
     pause('window-blur');
@@ -166,38 +155,27 @@ export function onFocusWindow(windowId) {
   }
 }
 
-/**
- * tab 激活。切换活跃 tab = finalize 老 slice + 换目标 + 开新 slice（若未暂停）。
- * @param {number} tabId
- * @param {number} [_windowId]
- */
+/** tab 激活：结算旧 slice，换目标，未暂停时开启新 slice。 */
 export function onActivateTab(tabId, _windowId) {
   if (typeof tabId !== 'number') return;
   rolloverDayIfNeeded();
 
-  // 换目标前先 finalize 老的
   finalizeActiveSlice();
-
   activeTabId = tabId;
-  activeHostname = '';  // 先清，startSlice 里再取
+  activeHostname = '';
 
-  // 若没被任何 reason 暂停 → 开新 slice
-  // 否则 no-op：activeTabId 已更新，pauseReasons 清空后 resume 会自然启动
   if (canRun()) {
     startSlice();
   } else {
-    // no-active-tab reason 在此处该清（因为现在有 active tab 了）
     if (pauseReasons.has('no-active-tab')) {
       pauseReasons.delete('no-active-tab');
       if (canRun() && activeSliceStart === null) startSlice();
     }
   }
+  persistSoon();
 }
 
-/**
- * tab 关闭。finalize 最后一段。
- * D17：不清 tabSessionMs（timeLog 天然保留已关闭 tab 的记录）。
- */
+/** tab 关闭时结算最后一段；缓存保留已关闭 tab 的今日时间。 */
 export function onRemoveTab(tabId) {
   if (typeof tabId !== 'number') return;
   rolloverDayIfNeeded();
@@ -207,7 +185,7 @@ export function onRemoveTab(tabId) {
     activeHostname = '';
     pauseReasons.add('no-active-tab');
   }
-  // D17 变化：不再 delete tabSessionMs（关闭的 tab 时间在 timeLog 里保留）
+  persistSoon();
   broadcastStateChange();
 }
 
@@ -221,81 +199,108 @@ export function onUpdateUrl(tabId, oldUrl, newUrl) {
   if (oldH === newH) return;
   finalizeActiveSlice();
   if (canRun()) startSlice();
+  persistSoon();
 }
 
 // ========== 周期性 ==========
+/** 强制结算并轮转当前 slice，用于导出和持久化边界。 */
+export async function checkpoint() {
+  rolloverDayIfNeeded();
+  if (activeSliceStart !== null) {
+    const write = finalizeActiveSlice();
+    if (canRun()) startSlice();
+    if (write) await write;
+  }
+  await persistence.flushPending();
+  await persistence.persist(activeSnapshot());
+}
+
 /** 长 slice 先结算并轮转，再保存新 slice 快照。 */
 export async function tick() {
   rolloverDayIfNeeded();
   const maxSliceMs = ALARM_PERIOD_S * 2 * 1000;
   if (activeSliceStart !== null && now() - activeSliceStart >= maxSliceMs) {
-    const write = finalizeActiveSlice();
-    if (canRun()) startSlice();
-    if (write) await write;
+    await checkpoint();
+    return;
   }
-  await persistSnapshot();
+  await persistence.flushPending();
+  await persistence.persist(activeSnapshot());
 }
 
-async function persistSnapshot() {
-  // active slice snapshot（SW 重启时用来 finalize 丢失的时间）
-  if (activeTabId !== null && activeSliceStart !== null) {
-    await localSet(STORAGE_KEY.ACTIVE_SLICE_SNAPSHOT, {
-      tabId: activeTabId,
-      hostname: activeHostname,
-      sliceStart: activeSliceStart,
-    });
-  } else {
-    await localRemove(STORAGE_KEY.ACTIVE_SLICE_SNAPSHOT);
-  }
-
-  // D17 迁移：清理 v1 遗留的 __tabCumulative 数据（一次性）
-  try {
-    await localRemove(STORAGE_KEY.TAB_CUMULATIVE);
-  } catch (_) { /* ignore */ }
+/** 历史清理事务：暂停计时并确保已完成 slice 全部落盘。 */
+export async function beginHistoryClear() {
+  pause('history-clear');
+  await persistence.flushPending();
+  await flushTimeLog();
+  await persistence.clearSnapshot();
 }
 
-/** SW 启动调用：从 timeLog 重建今日 tabSessionMs + 从 snapshot 恢复丢失片段。 */
+/** 清理完成后重置今日缓存并恢复计时。 */
+export function finishHistoryClear() {
+  tabSessionMs.clear();
+  domainSessionMs.clear();
+  currentDayStart = localDayRange(now()).start;
+  resume('history-clear');
+}
+
+export function abortHistoryClear() {
+  resume('history-clear');
+}
+
+function cacheRecoveredSlice(slice, dayStart, dayEnd) {
+  const duration = Math.min(slice.e, dayEnd) - Math.max(slice.s, dayStart);
+  if (duration <= 0) return;
+  if (typeof slice.tid === 'number') {
+    tabSessionMs.set(slice.tid, (tabSessionMs.get(slice.tid) || 0) + duration);
+  }
+  if (slice.h) domainSessionMs.set(slice.h, (domainSessionMs.get(slice.h) || 0) + duration);
+}
+
+/** SW 启动调用：从 timeLog 重建今日缓存 + 从 snapshot 恢复丢失片段。 */
 export async function init(deps = {}) {
   emit = deps.emit || null;
   if (deps.nowProvider) nowProvider = deps.nowProvider;
   if (deps.tabInfoProvider) tabInfoProvider = deps.tabInfoProvider;
   if (initialized) return;
-  initialized = true;
+  tabSessionMs.clear();
+  domainSessionMs.clear();
+  persistence.reset();
+  pauseReasons.clear();
 
   // D17：从 timeLog 今日数据重建 tabSessionMs
   const { start, end } = localDayRange(now());
   currentDayStart = start;
   const todaySlices = await getRange(start, end);
   for (const sl of todaySlices) {
+    const duration = sl.e - sl.s;
     if (typeof sl.tid === 'number') {
       const prev = tabSessionMs.get(sl.tid) || 0;
-      tabSessionMs.set(sl.tid, prev + (sl.e - sl.s));
+      tabSessionMs.set(sl.tid, prev + duration);
     }
+    if (sl.h) domainSessionMs.set(sl.h, (domainSessionMs.get(sl.h) || 0) + duration);
   }
 
-  // 恢复丢失 slice（SW 睡死期间的时间补偿）
-  const snap = await localGet(STORAGE_KEY.ACTIVE_SLICE_SNAPSHOT);
-  if (snap && typeof snap.sliceStart === 'number' && typeof snap.tabId === 'number') {
-    const cap = snap.sliceStart + ALARM_PERIOD_S * 2 * 1000;
-    const endTs = Math.min(now(), cap);
-    const delta = endTs - snap.sliceStart;
-    if (delta > 0) {
-      // timeLog 保留完整补偿段；今日缓存只计入本地零点之后的交集。
-      const todayDelta = endTs - Math.max(snap.sliceStart, currentDayStart);
-      if (todayDelta > 0) {
-        const prev = tabSessionMs.get(snap.tabId) || 0;
-        tabSessionMs.set(snap.tabId, prev + todayDelta);
-      }
-      if (snap.hostname) {
-        appendSlice({ s: snap.sliceStart, e: endTs, h: snap.hostname, tid: snap.tabId });
+  const snap = await persistence.loadSnapshot();
+  if (snap) {
+    for (const candidate of Array.isArray(snap.pending) ? snap.pending : []) {
+      if (!candidate?.h || candidate.e <= candidate.s) continue;
+      const slice = { ...candidate, id: candidate.id || persistence.sliceId(candidate) };
+      if (await appendSlice(slice)) cacheRecoveredSlice(slice, start, end);
+    }
+    if (typeof snap.sliceStart === 'number' && typeof snap.tabId === 'number' && snap.hostname) {
+      const endTs = Math.min(now(), snap.sliceStart + ALARM_PERIOD_S * 2 * 1000);
+      if (endTs > snap.sliceStart) {
+        const slice = { s: snap.sliceStart, e: endTs, h: snap.hostname, tid: snap.tabId };
+        slice.id = persistence.sliceId(slice);
+        if (await appendSlice(slice)) cacheRecoveredSlice(slice, start, end);
       }
     }
-    await localRemove(STORAGE_KEY.ACTIVE_SLICE_SNAPSHOT);
+    await persistence.clearSnapshot();
   }
 
-  // 初始状态：尚未收到任何 activate / focus 事件 → no-active-tab
   pauseReasons.add('no-active-tab');
-
+  try { await localRemove(STORAGE_KEY.TAB_CUMULATIVE); } catch (_) { /* legacy cleanup is best effort */ }
+  initialized = true;
   log('init done, today sessions =', tabSessionMs.size, 'tabs');
 }
 
@@ -341,19 +346,10 @@ export function getHostnameTotalMsForOpenTabs(hostname) {
 /** 今日域名维度聚合 → {hostname: ms}，数据源 tabSessionMs（M6 历史统计用）。 */
 export function getDomainTodayMs() {
   rolloverDayIfNeeded();
-  const result = {};
-  for (const [tabId, ms] of tabSessionMs) {
-    const info = tabInfoProvider(tabId);
-    const host = info ? getHostname(info.url || '') : '';
-    if (!host) continue;
-    result[host] = (result[host] || 0) + ms;
-  }
-  // 加上 running slice
+  const result = Object.fromEntries(domainSessionMs);
   if (activeTabId !== null && activeSliceStart !== null) {
     const host = activeHostname || hostnameOf(activeTabId);
-    if (host) {
-      result[host] = (result[host] || 0) + (now() - activeSliceStart);
-    }
+    if (host) result[host] = (result[host] || 0) + (now() - activeSliceStart);
   }
   return result;
 }
@@ -374,6 +370,8 @@ export function getTrackingState() {
 export const __testing = {
   reset() {
     tabSessionMs.clear();
+    domainSessionMs.clear();
+    persistence.reset();
     activeTabId = null;
     activeSliceStart = null;
     activeHostname = '';

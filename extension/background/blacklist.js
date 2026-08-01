@@ -16,7 +16,7 @@
 import { STORAGE_KEY, LOG_PREFIX } from '../shared/constants.js';
 import { localGet, localSet } from './store.js';
 import * as timeTracker from './timeTracker.js';
-import { getHostname } from '../shared/hostname.js';
+import { getHostname, normalizeHostnameInput } from '../shared/hostname.js';
 import * as tabRegistry from './tabRegistry.js';
 
 const PAUSE_REASON = 'blacklist';
@@ -51,40 +51,46 @@ function broadcastChange() {
 export async function init(deps = {}) {
   emit = deps.emit || null;
   const stored = await localGet(STORAGE_KEY.BLACKLIST);
-  if (Array.isArray(stored)) {
-    for (const h of stored) {
-      if (typeof h === 'string' && h) blockedHosts.add(h);
-    }
+  const normalized = Array.isArray(stored)
+    ? [...new Set(stored.map(normalizeHostnameInput).filter(Boolean))]
+    : [];
+  blockedHosts.clear();
+  for (const host of normalized) blockedHosts.add(host);
+  if (Array.isArray(stored) && JSON.stringify(stored) !== JSON.stringify(normalized)) {
+    await localSet(STORAGE_KEY.BLACKLIST, normalized);
   }
   log('init, blocked =', blockedHosts.size);
 }
 
-export async function add(hostname) {
-  if (typeof hostname !== 'string' || !hostname) throw new Error('invalid hostname');
+export async function add(input) {
+  const hostname = normalizeHostnameInput(input);
+  if (!hostname) throw new Error('invalid hostname');
+  if (blockedHosts.has(hostname)) return hostname;
+  const next = new Set(blockedHosts);
+  next.add(hostname);
+  await persist(next);
   blockedHosts.add(hostname);
-  await persist();
-  // 如果当前 active tab 就是这个域名 → 立即暂停
   recheckActiveTab();
   log('added', hostname);
   broadcastChange();
+  return hostname;
 }
 
-export async function remove(hostname) {
-  if (!blockedHosts.has(hostname)) return;
+export async function remove(input) {
+  const hostname = normalizeHostnameInput(input);
+  if (!hostname || !blockedHosts.has(hostname)) return hostname || null;
+  const next = new Set(blockedHosts);
+  next.delete(hostname);
+  await persist(next);
   blockedHosts.delete(hostname);
-  await persist();
-  // 如果之前因为这个域名暂停了，现在可能该恢复
   recheckActiveTab();
   log('removed', hostname);
   broadcastChange();
+  return hostname;
 }
 
 export function getList() {
   return Array.from(blockedHosts);
-}
-
-export function isBlocked(hostname) {
-  return blockedHosts.has(hostname);
 }
 
 /**
@@ -116,6 +122,6 @@ function recheckActiveTab() {
   }
 }
 
-async function persist() {
-  await localSet(STORAGE_KEY.BLACKLIST, Array.from(blockedHosts));
+async function persist(hosts = blockedHosts) {
+  await localSet(STORAGE_KEY.BLACKLIST, Array.from(hosts).sort());
 }

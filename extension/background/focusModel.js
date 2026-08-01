@@ -19,7 +19,7 @@ let focusedWindowId = null;
 
 let initialized = false;
 
-function setFocused(winId) {
+export function onFocusChanged(winId) {
   const isNone =
     winId === null ||
     winId === undefined ||
@@ -32,15 +32,11 @@ export async function init() {
   if (initialized) return;
   initialized = true;
 
-  chrome.windows.onFocusChanged.addListener((winId) => {
-    setFocused(winId);
-  });
-
   // 冷启动时先查一次
   try {
     const win = await chrome.windows.getLastFocused();
     if (win && typeof win.id === 'number' && win.focused) {
-      setFocused(win.id);
+      onFocusChanged(win.id);
       // 顺便把当前 active tab 喂给 timeTracker
       const [activeTab] = await chrome.tabs.query({ active: true, windowId: win.id });
       if (activeTab && typeof activeTab.id === 'number') {
@@ -48,7 +44,7 @@ export async function init() {
       }
     } else {
       // Chrome 不在焦点
-      setFocused(null);
+      onFocusChanged(null);
     }
   } catch (err) {
     console.warn(LOG_PREFIX, 'focusModel init query failed', err);
